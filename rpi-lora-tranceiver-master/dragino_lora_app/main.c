@@ -21,7 +21,12 @@
 
 #include <wiringPi.h>
 #include <wiringPiSPI.h>
-
+//mac address取得のためにソケットを開く
+#include <sys/socket.h>
+#include <sys/ioctl.h>
+#include <net/if.h>
+#include <netinet/in.h>
+#include <unistd.h>
 
 // #############################################
 // #############################################
@@ -141,9 +146,20 @@
 #define MAP_DIO1_LORA_NOP      0x30  // --11----
 #define MAP_DIO2_LORA_NOP      0xC0  // ----11--
 
+//----------------------------------------------
+//ハローかパケットかの判別
+#define BEACON 0b10000000
+#define DATA   0b00001000
+
+#define USER_DATA_FRAME_LEN 1500
+#define USER_CTRL_FRAME_LEN 100
+
 // #############################################
 // #############################################
 //
+
+
+
 typedef bool boolean;
 typedef unsigned char byte;
 
@@ -155,8 +171,12 @@ bool sx1272 = true;
 
 byte receivedbytes;
 
-enum sf_t { SF7=7, SF8, SF9, SF10, SF11, SF12 };
-
+//enum sf_t { SF7=7, SF8, SF9, SF10, SF11, SF12 };
+//SF6を追加　
+//implicitモードをオンにしなければいけない
+//DetectionOptimizeのあたいを0x05にする
+//
+enum sf_t { SF6=6, SF7, SF8, SF9, SF10, SF11, SF12 };
 /*******************************************************************************
  *
  * Configure these values!
@@ -172,7 +192,7 @@ int RST   = 0;
 sf_t sf = SF7;
 
 // Set center frequency
-uint32_t  freq = 920000000; // in Mhz! (868.1)  868.1->920.0
+uint32_t  freq = 915000000; // in Mhz! (868.1)  868.1->920.0
 
 //byte hello[32] = "world";
 int count=0;
@@ -182,20 +202,98 @@ time_t t,later;
 
 //パケットヘッダの構造体
 typedef struct{
-    uint8_t CodeType;//パケットかデータかの識別
+    uint8_t type;//パケットかデータかの識別
     uint8_t SourceAddr;
     uint8_t DestAddr;
     uint8_t len;
     uint16_t seqNum;
     uint8_t payload[];
-}packet_header_t;
-//RoutingTable_t;
+}mac_packet_header_t;
+
 //loraのフレームヘッダの構造体
+typedef struct{
+    uint8_t type;
+    uint8_t flag;
+    uint16_t duration;
+    uint8_t addr1[6];
+    uint8_t addr2[6];
+    uint8_t addr3[6];
+    uint8_t seqCtrl;
+    uint8_t addr4[6];
+    uint8_t payload[];
+}mac_lora_frame_header_t;
 
+//typedef
+//
+uint8_t data_frame[]={};
+uint8_t ctrl_frame[]={};
+uint8_t my_addr[6]={};
+/*ノードの固有値
+ * LoRaの物理層から取得はできないため、有線LANのものを取得して使う
+*/
+void get_mac_addr(){
+    int fd;
+    struct ifreq ifr;
 
-//senderかreceiverかの判定
-boolean flag = true;
+    fd = socket(AF_INET,SOCK_DGRAM,0);
 
+    ifr.ifr_addr.sa_family = AF_INET;
+    strncpy(ifr.ifr_name,"eth0",IFNAMSIZ-1);
+
+   
+    ioctl(fd,SIOCGIFHWADDR,&ifr);
+
+    for(int i=0;i<6;i++){
+	    my_addr[i] = (unsigned char)ifr.ifr_hwaddr.sa_data[i];
+    }
+    close(fd);
+}
+
+void mac_print_addr(uint8_t* addr){
+	printf("mac addr:%02x:%02x:%02x;%02x;%02x:%02x\n",addr[0],addr[1],addr[2],addr[3],addr[4],addr[5]);
+}
+
+void mac_set_addr(uint8_t*original,uint8_t* target){
+    for(int i = 0; i < 6; i++) target[i]=original[i];
+}
+
+void mac_set_bc_addr(uint8_t* target){
+    for(int i = 0; i < 6; i++) target[i] = 0xff;    
+}
+
+void mac_tx_frame_header_init(){
+    mac_lora_frame_header_t* data_hdr = (mac_lora_frame_header_t*)data_frame;
+    mac_lora_frame_header_t* ctrl_hdr = (mac_lora_frame_header_t*)ctrl_frame;
+    
+    data_hdr->type = DATA;
+    ctrl_hdr->type = BEACON;
+    
+    mac_set_bc_addr(data_hdr->addr1);
+    mac_set_addr(my_addr,data_hdr->addr2);
+    mac_set_bc_addr(data_hdr->addr3);
+    mac_set_bc_addr(data_hdr->addr4);
+
+    mac_set_bc_addr(ctrl_hdr->addr1);
+    mac_set_addr(my_addr,ctrl_hdr->addr2);
+    mac_set_bc_addr(ctrl_hdr->addr3);
+    mac_set_bc_addr(ctrl_hdr->addr4);
+}
+
+void mac_tx_frame_payload_init(){
+    mac_lora_frame_header_t* data_hdr = (mac_lora_frame_header_t*)data_frame;
+    mac_lora_frame_header_t* ctrl_hdr = (mac_lora_frame_header_t*)ctrl_frame;
+    mac_packet_header_t* data_org_hdr = (mac_packet_header_t*)data_hdr->payload;
+    mac_packet_header_t* ctrl_org_hdr = (mac_packet_header_t*)ctrl_hdr->payload;
+    data_org_hdr->type = DATA;
+    data_org_hdr->len = USER_DATA_FRAME_LEN;
+    ctrl_org_hdr->type = BEACON;
+    ctrl_org_hdr->len = USER_CTRL_FRAME_LEN;
+    int i = 0;
+    for(i = 0; i<1460;i++){
+        data_org_hdr->payload[i] = 0x77;
+        ctrl_org_hdr->payload[i] = 0x77;
+    }
+}
 void die(const char *s)
 {
     perror(s);
@@ -235,8 +333,8 @@ void writeReg(byte addr, byte value)
     wiringPiSPIDataRW(CHANNEL, spibuf, 2);
     
     unselectreceiver();
-    printf("value=%02x\n",value);
-    printf("CR and RW is = %02x\n",readReg(REG_MODEM_CONFIG));
+    //printf("value=%02x\n",value);
+    //printf("CR and RW is = %02x\n",readReg(REG_MODEM_CONFIG));
 }
 
 static void opmode (uint8_t mode) {
@@ -303,11 +401,30 @@ void SetupLoRa()
     } else {
         if (sf == SF11 || sf == SF12) {
             writeReg(REG_MODEM_CONFIG3,0x0C);
-        } else {
+        }else if(sf == SF6){
+            /*
+            u1_t = mc1 = 0;
+            mc1 |= SX1276_MC1_IMPLICIT_HEADER_MODE_ON;
+            mc1 |= 0x72;
+            * */
+             writeReg(REG_MODEM_CONFIG,0x73);
+             //RegDetectOptimize
+             writeReg(0x31,0xc5);
+             //RefDetectionThreshold
+             writeReg(0x37,0x0c);
+             //
+            writeReg(REG_MODEM_CONFIG,0x72);
+            writeReg(REG_MODEM_CONFIG2,(sf<<4) | 0x04);
+        }else {
             writeReg(REG_MODEM_CONFIG3,0x04);
+            //
+            writeReg(REG_MODEM_CONFIG,0x72);
+            writeReg(REG_MODEM_CONFIG2,(sf<<4) | 0x04);
         }
+        /*
         writeReg(REG_MODEM_CONFIG,0x72);
         writeReg(REG_MODEM_CONFIG2,(sf<<4) | 0x04);
+        */
     }
 
     if (sf == SF10 || sf == SF11 || sf == SF12) {
@@ -454,6 +571,12 @@ void txlora(byte *frame, byte datalen) {
     printf("send: %s\n", frame);
     
 }
+inline void set_addr(uint8_t* original,uint8_t* target){
+    for(int i=0;i<6;i++) target[i]=original[i];
+}
+void frame_header_init(){
+    
+}
 
 int main (int argc, char *argv[]) {
     /*
@@ -464,10 +587,11 @@ int main (int argc, char *argv[]) {
     */
         
    // RoutingTable_t hello ={"0","0","0","hello,world!"};  
-    packet_header_t hello;
-    hello.sendID=0;
+    mac_packet_header_t hello;
+    hello.SourceAddr=0;
     
-    packet_header_t *p=&hello;
+    mac_packet_header_t *p=&hello;
+    //p->payload="hello";
     
     wiringPiSetup () ;
     pinMode(ssPin, OUTPUT);
@@ -482,6 +606,15 @@ int main (int argc, char *argv[]) {
     opmodeLora();
     opmode(OPMODE_STANDBY);
     opmode(OPMODE_RX);
+
+    //printf("value is=%02x\n",readReg(0x31));
+//macアドレスの取得
+	get_mac_addr();
+	mac_print_addr(my_addr);
+	
+    //init tx frame function
+    mac_tx_frame_header_init();
+    mac_tx_frame_payload_init();
 
     //時刻を一秒追加
     time(&later);
@@ -518,7 +651,7 @@ int main (int argc, char *argv[]) {
             writeReg(RegPaRamp, (readReg(RegPaRamp) & 0xF0) | 0x08); // set PA ramp-up time 50 uSec
 
             configPower(23);
-
+            printf("value is=%02x\n",readReg(0x31));
             printf("\n");
             printf("Send packets at SF%i on %.6lf Mhz.\n", sf,(double)freq/1000000);
             printf("------------------\n");
@@ -574,7 +707,8 @@ int main (int argc, char *argv[]) {
         while(1) {
             txlora(hello, strlen((char *)hello ));
             delay(5000);
-        }
+            * //delay(50)
+            *         }
     } else {
 
         // radio init
