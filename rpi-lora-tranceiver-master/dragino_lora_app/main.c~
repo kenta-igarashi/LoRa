@@ -195,7 +195,7 @@ sf_t sf = SF7;
 uint32_t  freq = 920000000; // in Mhz! (868.1)  868.1->920.0
 
 //byte hello[32] = "world";
-//int count=0;
+int count=0;
 //時間計測の構造体
 clock_t sender , receiver;
 time_t t,later;
@@ -231,18 +231,14 @@ typedef struct{
 }__attribute__((packed)) mac_lora_frame_header_t;
 */
 
+//typedef
+//
+/*
+uint8_t data_frame[]={};
+*/
+uint8_t ctrl_frame[]={};
 
-//uint8_t data_frame[]={};
-//uint8_t ctrl_frame[]={};
 
-/*固定長の配列を宣言しないとバイナリがバグる
- * uint8_tかunsigned charの１バイトで宣言
- * 255はLoRaの最大ペイロードサイズ
- */
-uint8_t hello_packet[255] = {};
-for(int i =0;i<1000;i++){
-    hello_packet[i]=0;
-}
 /*
 mac_frame_header_t hello_packet;
 mac_frame_header_t* hello = (mac_frame_header_t*)&hello_packet;
@@ -347,9 +343,8 @@ void mac_tx_frame_header_init(mac_frame_header_t* hello_pack){
 }
 */
 
-/*mac frameとlora frameの初期化
- */
 void mac_tx_frame_header_init(mac_frame_header_t* hello_pack){
+    
     mac_frame_header_t* ctrl_hdr =hello_pack;
 
     ctrl_hdr->type = BEACON;
@@ -367,7 +362,6 @@ void mac_tx_frame_payload_init(mac_frame_header_t* frame){
     ctrl_org_hdr->HopCount = 3;
     mac_set_bc_addr(ctrl_org_hdr->DestAddr);
     ctrl_org_hdr->seqNum = 7;
-    
     for(int i = 0 ;i<10;i++){
         printf("%02x ",p[i]);
     }
@@ -401,9 +395,6 @@ void print_lora_frame_header(mac_frame_header_t* data){
     }
     printf("\n");
 }
-
-//void 
-
 void die(const char *s)
 {
     perror(s);
@@ -607,24 +598,17 @@ void receivepacket() {
             }
             count++;
             printf("%d\n",count);
-            
-            mac_frame_header_t* p = (mac_frame_header_t*)message;
-
+/*
             printf("Packet RSSI: %d, ", readReg(0x1A)-rssicorr);
             printf("RSSI: %d, ", readReg(0x1B)-rssicorr);
             printf("SNR: %li, ", SNR);
             printf("Length: %i", (int)receivedbytes);
             printf("\n");
-            //printf("Payload: %s\n", message);
-            
-            print_mac_frame(p);
-            print_lora_frame_header(p);
+            printf("Payload: %s\n", message);
+         */   
 
-            for(int = 0;i < (int)receivedbytes;i++){
-                printf("%02x ",message[i]);
-            }
-            printf("\n");
-            
+            //printf("Sequence number:%d\n",seq);
+
         } // received a message
 
     }  //dio0=1;
@@ -688,7 +672,7 @@ void txlora(byte *frame, byte datalen) {
     //printf("seq: %d",seqNum);
     printf("send: %s\n", frame);
     
-    printf("length: %d\n",sizeof(hello_packet));
+    printf("length: %d\n",sizeof(mac_frame_header_t));
     
 
     for(int i = 0;i<datalen;i++){
@@ -715,9 +699,9 @@ int main (int argc, char *argv[]) {
         hello_packet[i]=0;
     }
   */
-    mac_frame_header_t *hello=(mac_frame_header_t*)&hello_packet;
+    //mac_frame_header_t *hello=(mac_frame_header_t*)&hello_packet;
 
- 
+  mac_frame_header_t* hello = (mac_frame_header_t*)&ctrl_frame;
     wiringPiSetup () ;
     pinMode(ssPin, OUTPUT);
     pinMode(dio0, INPUT);
@@ -749,7 +733,7 @@ int main (int argc, char *argv[]) {
 	
       //仮のデータ挿入
     
-    hello->type = BEACON;
+    //hello->type = BEACON;
     mac_set_addr(my_addr,hello->SourceAddr);
     hello->seqNum = 9;
     //mac_print_addr(hello->SourceAddr);
