@@ -215,8 +215,23 @@ typedef struct{
     uint8_t HopCount;
     uint8_t DestAddr[6];
     uint8_t seqNum;
-    uint8_t payload[];
-}__attribute__((packed))mac_lora_frame_header_t;
+    //uint8_t payload[];
+}__attribute__((packed))mac_frame_payload_t;
+
+typedef struct routing_table_entry_struct{
+    uint8_t hop;
+    uint8_t seq;
+    uint8_t addr[6];
+    //lifetime
+    routing_table_entry_struct* next;
+}routing_table_entry_t;
+
+typedef struct{
+    routing_table_entry_t* head;
+    uint8_t size;
+}routing_table_t;
+
+
 /*
 typedef struct{
     uint8_t type;
@@ -239,8 +254,11 @@ typedef struct{
  * uint8_tかunsigned charの１バイトで宣言
  * 255はLoRaの最大ペイロードサイズ
  */
-uint8_t hello_packet[255] = {};
+uint8_t Hello[255] = {};
 
+mac_frame_header_t *Hello_p=(mac_frame_header_t*)&Hello;
+
+routing_table_t* r_table = NULL;
 /*
 mac_frame_header_t hello_packet;
 mac_frame_header_t* hello = (mac_frame_header_t*)&hello_packet;
@@ -360,23 +378,24 @@ void mac_tx_frame_header_init(mac_frame_header_t* hello_pack){
     ctrl_hdr->type = BEACON;
     mac_set_bc_addr(ctrl_hdr->SourceAddr);
     mac_set_bc_addr(ctrl_hdr->DestAddr);
-    ctrl_hdr->len = USER_CTRL_FRAME_LEN;
+    ctrl_hdr->len = USER_CTRL_FRAME_LEN;// hdr + payload
     ctrl_hdr->seqNum = 0;
 
 }
 
 void mac_tx_frame_payload_init(mac_frame_header_t* frame){
     printf("debug\n");
-    mac_lora_frame_header_t* ctrl_org_hdr = (mac_lora_frame_header_t*)frame->payload;
-    byte * p = (byte*)ctrl_org_hdr;
+    mac_frame_payload_t* ctrl_org_hdr = (mac_frame_payload_t*)frame->payload;
+    //byte * p = (byte*)ctrl_org_hdr;
     ctrl_org_hdr->HopCount = 0;
     mac_set_bc_addr(ctrl_org_hdr->DestAddr);
     ctrl_org_hdr->seqNum = 0;
-    
+    /*
     for(int i = 0 ;i<10;i++){
         printf("%02x ",p[i]);
     }
     printf("\n");
+    */
 }
 
 void print_mac_frame(mac_frame_header_t* data){
@@ -393,21 +412,195 @@ void print_mac_frame(mac_frame_header_t* data){
 }
 
 void print_lora_frame_header(mac_frame_header_t* data){
-    mac_lora_frame_header_t* packet = (mac_lora_frame_header_t*)data->payload;
-    byte* p = (byte*)packet;
+    mac_frame_payload_t* packet = (mac_frame_payload_t*)data->payload;
+    //byte* p = (byte*)packet;
     printf("lora packet header: \n");
     printf("Hop: %u\n",packet->HopCount);
     printf("Destination ");
     mac_print_addr(packet->DestAddr);
     printf("Sequence number: %u\n",packet->seqNum);
     printf("\n");
+    /*
     for(int i = 0 ;i<10;i++){
         printf("%02x ",p[i]);
     }
     printf("\n");
+    */
 }
 
-//void 
+boolean is_smaller_addr(uint8_t* addr1,uint8_t* addr2){
+    for(int i = 0 ;i<6;i++){
+        if(addr1[i]<addr2[i]){ //addr1=origin 
+            return true;
+        }else if(addr1[i]>addr2[i]){
+            return false;
+        }
+    }
+    return false;
+}
+
+boolean is_same_addr(uint8_t* addr1,uint8_t* addr2){
+    for(int i =0;i<6;i++){
+        if(addr1[i]!=addr2[i]) return false;
+    }
+    return true;
+}
+void insert_routing_table(uint8_t* addr,uint8_t hop,uint8_t seq){
+
+    routing_table_entry_t* current = r_table->head;
+    routing_table_entry_t* previous = NULL;
+    
+    //if(!r_table->head){
+      //insert  
+    //  return ;
+    //}
+    printf("tes\n");
+    
+    // current
+    //while(current && current->next && is_smaller_addr((current->next)->addr, addr))
+    //current = current->next;
+    while(current && is_smaller_addr(current->addr,addr)){ //current!=NULL && is same addr
+    //while(current ){ //current!=NULL && is same addr
+        printf("tes1\n");
+        previous = current;
+        current = current->next;
+    }
+
+    
+//    if(!current){//routing tableがまだない場合 current==NULL
+        if(0){
+        //if(!r_table->head){ //r_table->head == NULL
+      //insert  
+        printf("new entry\n");
+        routing_table_entry_t* new_entry = (routing_table_entry_t* )malloc(sizeof(routing_table_entry_t));
+        memset(new_entry, 0, sizeof(routing_table_entry_t));
+        mac_set_addr(addr, new_entry->addr);
+        new_entry->hop = hop;
+        new_entry->seq = seq;
+        new_entry->next = NULL;
+        // new_entry->lifetime;
+        (r_table)->size++;
+        
+        //if(r_table->head){
+            // size = 0;
+            r_table->head = new_entry;
+//        }else{
+            // size != 0 && saigo no youso
+//            current->next = new_entry;
+ //       }            
+        //}
+    }
+    // else if(current->addr == addr){
+    else if(current && is_same_addr(current->addr,addr)){
+        //update
+        if(current->seq < seq){
+            printf("tes3\n");
+            current->hop = hop;
+            current->seq = seq;
+            mac_set_addr(addr,current->addr);
+        }
+        else if(current->seq==seq && current->hop > hop){
+            //updata
+            printf("tes4\n");
+            current->hop = hop;
+            current->seq = seq;
+            mac_set_addr(addr,current->addr);
+        }
+    }
+    else{
+        //insert
+        printf("tes5\n");
+        routing_table_entry_t* new_entry = (routing_table_entry_t* )malloc(sizeof(routing_table_entry_t));
+        memset(new_entry, 0, sizeof(routing_table_entry_t));
+
+        mac_set_addr(addr, new_entry->addr);
+        new_entry->hop = hop;
+        new_entry->seq = seq;
+        // new_entry->lifetime;
+        new_entry->next = NULL;
+        (r_table)->size++;
+        
+        /*
+        if(!current){
+            printf("tes8\n");
+            previous->next = new_entry;
+        }
+        else if(!current->next){ //current->next==NULL
+            printf("tes6\n");
+            current->next = new_entry;
+           //new_entry->next = NULL;
+           //exit(1);
+        }
+        else{
+            printf("tes7\n");
+            previous->next = new_entry;
+            new_entry->next = current;
+        }*/
+        if(!previous){
+            new_entry->next = r_table->head;
+            r_table->head = new_entry;            
+        }else{
+            new_entry->next = previous->next;
+            previous->next = new_entry;
+        }
+    }
+    return ;
+} 
+
+void delete_routing_table(){
+}
+
+int get_routing_table(mac_frame_header_t* hello){
+    mac_frame_payload_t* current = (mac_frame_payload_t*) hello->payload;
+    routing_table_entry_t* current_entry = r_table->head;
+    int i =0;
+    while(current_entry){
+        current->HopCount = current_entry->hop;
+        current->seqNum  = current_entry->seq;
+        //current->DestAddr = current_entry->addr;
+        mac_set_addr(current_entry->addr,current->DestAddr);
+        current = current++;
+        i++;
+        current_entry = current_entry->next;
+    }
+   return i;
+}
+
+void print_routing_table(routing_table_t* routing_t){
+    routing_table_entry_t* current =routing_t->head;
+    printf("routing table is:\n");
+    //routing_table_entry_t* current = r_table->head;
+    int i =1;
+    if(!current){ //current==NULL
+        printf("data nothing\n");
+        return ;
+    }
+    while(current){//current!=NULL
+        printf("Node%d ",i);
+        mac_print_addr(current->addr);
+        printf("Hop: %u\n",current->hop);
+        printf("Sequence Number: %u\n",current->seq);
+        printf("table size: %d\n",routing_t->size);
+        i++;
+        current = current->next;
+    }
+    
+}
+
+void add_routing_table(routing_table_t* routing_t){
+    routing_table_entry_t* current =routing_t->head;
+    printf("routing table is:\n");
+    //routing_table_entry_t* current = r_table->head;
+    if(!current){ //current==NULL
+        printf("data nothing\n");
+        return ;
+    }
+    while(current){//current!=NULL
+        insert_routing_table(current->addr,current->hop+1,current->seq);
+        current = current->next;
+    }
+    
+}
 
 void die(const char *s)
 {
@@ -614,6 +807,11 @@ void receivepacket() {
             printf("%d\n",count);
             
             mac_frame_header_t* p = (mac_frame_header_t*)message;
+            //mac_frame_payload_t* pay_p = (mac_frame_payload_t*)p;
+            printf("\n");
+            printf("------------------\n");
+            printf("Listening at SF%i on %.6lf Mhz.\n", sf,(double)freq/1000000);
+
 
             printf("Packet RSSI: %d, ", readReg(0x1A)-rssicorr);
             printf("RSSI: %d, ", readReg(0x1B)-rssicorr);
@@ -624,6 +822,20 @@ void receivepacket() {
             
             print_mac_frame(p);
             print_lora_frame_header(p);
+
+            // sousinsitayatu
+            insert_routing_table(p->SourceAddr, 1, p->seqNum);
+            add_routing_table(r_table);
+            print_routing_table(r_table);
+
+            // payload no entry list.
+            /*num_entry = p->len - sizeof(mac_frame_header_t) / sizeof(mac_lora_frame_header_t);
+
+            for(int i = 0; i < num_entry; i++){
+                mac_lora_frame_header_t* ptr = p->payload+sizeof(mac_lora_frame_header_t)*num_entry;
+                insert_routing_table(ptr->addr, ptr->hop, ptr->seq);
+            }*/
+            
 
             for(int i = 0;i < (int)receivedbytes;i++){
                 printf("%02x ",message[i]);
@@ -693,13 +905,20 @@ void txlora(byte *frame, byte datalen) {
     //printf("seq: %d",seqNum);
     printf("send: %s\n", frame);
     
-    printf("length: %d\n",sizeof(hello_packet));
+    //確認
+    print_mac_frame(Hello_p);
+    print_lora_frame_header(Hello_p);
+    printf("------------------\n");
+
+    
+    //printf("length: %d\n",sizeof(Hello));
     
 
     for(int i = 0;i<datalen;i++){
         printf("%02x ",frame[i]);
     }
     printf("\n");
+    
 }
 
 int main (int argc, char *argv[]) {
@@ -720,8 +939,12 @@ int main (int argc, char *argv[]) {
         hello_packet[i]=0;
     }
   */
-    mac_frame_header_t *hello=(mac_frame_header_t*)&hello_packet;
-
+    //mac_frame_header_t *Hello_p=(mac_frame_header_t*)&Hello;
+    
+    //routing_table init function
+    r_table = (routing_table_t *) malloc(sizeof(routing_table_t));
+    r_table->size=0;
+    r_table->head = NULL;
  
     wiringPiSetup () ;
     pinMode(ssPin, OUTPUT);
@@ -745,19 +968,23 @@ int main (int argc, char *argv[]) {
     
     //init tx frame function
     //frame_init(hello_packet);
-    mac_tx_frame_header_init(hello);
+    memset(&Hello[0],0,sizeof(Hello));
+    mac_tx_frame_header_init(Hello_p);
     //mac_tx_frame_payload_init();
-    mac_tx_frame_payload_init(hello);
+    mac_tx_frame_payload_init(Hello_p);
+
     
     //自身のmacアドレスの取得
 	get_my_mac_addr();
+    printf("my ");
 	mac_print_addr(my_addr);
-	
+    //printf("-----------------------------\n");
+     
       //仮のデータ挿入
     
-    hello->type = BEACON;
-    mac_set_addr(my_addr,hello->SourceAddr);
-    hello->seqNum = 9;
+    Hello_p->type = BEACON;
+    mac_set_addr(my_addr,Hello_p->SourceAddr);
+    Hello_p->seqNum = 9;
     //mac_print_addr(hello->SourceAddr);
     
         
@@ -765,8 +992,8 @@ int main (int argc, char *argv[]) {
     time(&later);
     later+=1;
     while(1){
-       time(&t);
-      if(t<=later){
+        time(&t);
+        if(t<=later){
       
             //時間計測
             //sender=clock();
@@ -796,10 +1023,12 @@ int main (int argc, char *argv[]) {
             writeReg(RegPaRamp, (readReg(RegPaRamp) & 0xF0) | 0x08); // set PA ramp-up time 50 uSec
 
             configPower(23);
-            printf("value is=%02x\n",readReg(0x31));
-            printf("\n");
-            printf("Send packets at SF%i on %.6lf Mhz.\n", sf,(double)freq/1000000);
+            //printf("value is=%02x\n",readReg(0x31));
+            //printf("\n");
+            
             printf("------------------\n");
+            printf("Send packets at SF%i on %.6lf Mhz.\n", sf,(double)freq/1000000);
+            //printf("------------------\n");
             /*
             if (argc > 2){
                 strncpy((char *)hello, argv[2], sizeof(hello));
@@ -808,12 +1037,53 @@ int main (int argc, char *argv[]) {
             //txlora(hello, strlen((char *)hello));/
 
             //txlora((byte *)&hello, sizeof(hello));
+            
+            
             //確認
-            print_mac_frame(hello);
-            print_lora_frame_header(hello);
+            //print_mac_frame(Hello_p);
+            //print_lora_frame_header(Hello_p);
+            //printf("------------------\n");
+            
+            
             //txlora((byte *)&hello,strlen((char*)hello));
             //txlora((byte*)&hello_packet, sizeof(mac_frame_header_t));
-            txlora((byte*)&hello_packet, 40);
+            
+            //////
+            //mac_lora_frame_header_t hello_payload[256];
+            //
+            /*
+            int num = get_routing_table(hello); { 
+                mac_lora_frame_header_t* current = (mac_lora_frame_header_t*) hello->payload;
+                routing_table_entry_t* current_entry = rt_table->head;
+                int i =0;
+                while(current_rt){
+                    ccurrent->hop = current_entry->hop;
+                    current->seq  = ->seq;
+                    current->addr = ->addr;
+                    current = current++;
+                    i++;
+                    current-rt = current_rt->next;
+                }
+               return i;
+            }
+            * 
+            */
+            // header_len = sizeof(mac_frame_header_t);
+            // payload_len = num * sizeof(mac_lora_frame_header_t);
+            // total_len = header_len + payload_len;
+            //Hello_p->len = total_len;
+            //txlora((byte*)&Hello, total_len);
+            //////
+            
+            int num = get_routing_table(Hello_p);
+            int header_len = sizeof(mac_frame_header_t);
+            int payload_len = num * sizeof(mac_frame_payload_t);
+            printf("%d %d\n",header_len,payload_len);
+            int total_len = header_len + payload_len;
+            Hello_p->len = total_len;
+            txlora((byte*)&Hello, total_len);
+            //txlora((byte*)&Hello,40);
+            
             
             //受信モードに切り替え
             SetupLoRa();
@@ -868,7 +1138,7 @@ int main (int argc, char *argv[]) {
             delay(1);
         }
 */
-
-
+    
+    //free(r_table);
     return (0);
 }
