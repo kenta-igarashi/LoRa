@@ -1,0 +1,2 @@
+g++ -c -Wall  main.c
+g++ main.o  -lwiringPi -o dragino_lora_app
