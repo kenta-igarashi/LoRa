@@ -981,9 +981,12 @@ void SetupLoRa()
 
 void get_time_now(mac_frame_header_t* hdr){
     struct timespec ts;
+    struct tm tm_tx,tm_rx;
     clock_gettime(CLOCK_REALTIME,&ts);
-    
-
+    localtime_r(&ts.tv_sec,&tm_rx);
+    localtime_r(&hdr->time.tv_sec,&tm_tx);
+    printf("txtime:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm_tx.tm_year+1900,tm_tx.tm_mon+1,tm_tx.tm_mday,tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec,hdr->time.tv_nsec);
+    printf("rxtime:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec,ts.tv_nsec);
     
 }
 
@@ -1027,6 +1030,9 @@ void receivepacket() {
     if(digitalRead(dio0) == 1)
     {
         if(receive(message)) {
+            mac_frame_header_t* p = (mac_frame_header_t*)message;
+            //get time now and diff tx to rx
+            get_time_now(p);
             byte value = readReg(REG_PKT_SNR_VALUE);
             if( value & 0x80 ) // The SNR sign bit is 1
             {
@@ -1045,10 +1051,11 @@ void receivepacket() {
             } else {
                 rssicorr = 157;
             }
+            
             count++;
             printf("%d\n",count);
             
-            mac_frame_header_t* p = (mac_frame_header_t*)message;
+            
             //mac_frame_payload_t* pay_p = (mac_frame_payload_t*)p;
             printf("\n");
             printf("------------------\n");

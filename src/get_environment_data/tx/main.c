@@ -1157,7 +1157,7 @@ void txlora(byte *frame, byte datalen) {
 
 void get_time_now(mac_frame_header_t* hdr){
     struct timespec ts;
-    struct tm tm;
+    //struct tm tm;
     clock_gettime(CLOCK_REALTIME,&ts);
     //localtime_r(&ts.tv_sec,&tm);
     hdr->time = ts;
