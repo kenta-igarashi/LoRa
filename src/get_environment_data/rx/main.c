@@ -214,7 +214,8 @@ typedef struct{
     uint8_t len;
     uint16_t seqNum;
     struct timespec time;
-    uint8_t payload[6];
+    uint16_t checksum;
+    uint8_t payload[4];
 }__attribute__ ((packed)) mac_frame_header_t; //パディング処理
 
 //loraのフレームヘッダの構造体
@@ -930,6 +931,42 @@ void get_time_now(mac_frame_header_t* hdr){
     //printf("difftime:")
 }
 
+uint16_t checksum(byte* data,int len){
+    register uint32_t sum;
+    register uint16_t *ptr;
+    register int c;
+    
+    sum = 0;
+    ptr = (uint16_t*)data;
+    
+    for(c = len;c > 1;c -= 2){
+        sum += (*ptr);
+        if(sum & 0x800000000){
+            sum = (sum & 0xFFFF) + (sum >> 16);
+        }
+        ptr++;
+    }
+    if(c == 1){
+        uint16_t val;
+        val = 0;
+        memcpy(&val,ptr,sizeof(uint8_t));
+        sum += val;
+    }
+    while(sum >> 16){
+        sum = (sum & 0xFFFF) + (sum >> 16);
+    }
+    return (~sum);
+}
+
+boolean calc_checksum(mac_frame_header_t* hdr,int len){
+    uint16_t prev_checksum = 0;
+    prev_checksum = hdr->checksum;
+    
+    hdr->checksum = 0;
+    return checksum((byte*)hdr,len) == prev_checksum;
+        
+}
+
 
 boolean receive(char *payload) {
     // clear rxDone
@@ -940,6 +977,7 @@ boolean receive(char *payload) {
     //  payload crc: 0x20
     
     printf("CRC value: %x\n",irqflags & 0x20);
+    printf("irqflags: %d\n",irqflags);
     
     if((irqflags & 0x20) == 0x20)
     {
@@ -1053,6 +1091,8 @@ void receivepacket() {
             printf("Length: %i", (int)receivedbytes);
             printf("\n");
             //printf("Payload: %s\n", message);
+            
+            printf("%d\n",calc_checksum(p,(int)receivedbytes));
             
             print_mac_frame_header(p);
             output_data_csv(packet_rssi,rssi,SNR,(int)receivedbytes,count,p);

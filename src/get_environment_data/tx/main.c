@@ -210,7 +210,8 @@ typedef struct{
     uint8_t len;
     uint16_t seqNum;
     struct timespec time;
-    uint8_t payload[226];
+    uint16_t checksum;
+    uint8_t payload[4];
 }__attribute__ ((packed)) mac_frame_header_t; //パディング処理
 
 //loraのフレームヘッダの構造体
@@ -405,8 +406,10 @@ void mac_tx_frame_header_init(mac_frame_header_t* hello_pack){
     ctrl_hdr->type = HELLO;
     mac_set_bc_addr(ctrl_hdr->SourceAddr);
     mac_set_bc_addr(ctrl_hdr->DestAddr);
-    ctrl_hdr->len = USER_CTRL_FRAME_LEN;// hdr + payload
+    //ctrl_hdr->len = USER_CTRL_FRAME_LEN;// hdr + payload
+    ctrl_hdr->len = 0;// hdr + payload
     ctrl_hdr->seqNum = 0;
+    ctrl_hdr->checksum = 0;
 
 }
 
@@ -1081,6 +1084,35 @@ void receivepacket() {
     }  //dio0=1;
 }
 
+uint16_t checksum(byte *data,int len){
+    register uint32_t sum;
+    register uint16_t *ptr;
+    register int c;
+    
+    sum = 0;
+    ptr = (uint16_t *)data;
+    
+    for(c = len;c > 1;c -= 2){
+        sum += (*ptr);
+        if(sum & 0x80000000){
+            sum = (sum & 0xFFFF) + (sum >> 16);
+        }
+        ptr++;
+    }
+    if(c == 1){
+        uint16_t val;
+        val = 0;
+        memcpy(&val,ptr,sizeof(uint8_t));
+        sum += val;
+    }
+    while(sum >> 16){
+        sum = (sum & 0xFFFF) + (sum >> 16);
+    }
+    return (~sum);
+    
+}
+
+
 static void configPower (int8_t pw) {
     if (sx1272 == false) {
         // no boost used for now
@@ -1118,6 +1150,10 @@ static void writeBuf(byte addr, byte *value, byte len) {
 
 void txlora(byte *frame, byte datalen) {
 
+    //checksum function
+    Hello_p->checksum = checksum(frame,(int)datalen);
+
+
     // set the IRQ mapping DIO0=TxDone DIO1=NOP DIO2=NOP
     writeReg(RegDioMapping1, MAP_DIO0_LORA_TXDONE|MAP_DIO1_LORA_NOP|MAP_DIO2_LORA_NOP);
     // clear all radio IRQ flags
@@ -1147,12 +1183,18 @@ void txlora(byte *frame, byte datalen) {
     
     //printf("length: %d\n",sizeof(Hello));
     
-
+    
     for(int i = 0;i<datalen;i++){
         printf("%02x ",frame[i]);
     }
     printf("\n");
     
+/*
+    for(int i = 0;i<datalen;i++){
+        printf("%02x ",frame[i]);
+    }
+    printf("\n");
+  */  
 }
 
 void get_time_now(mac_frame_header_t* hdr){
