@@ -210,7 +210,7 @@ typedef struct{
     uint8_t len;
     uint16_t seqNum;
     struct timespec time;
-    uint8_t payload[6];
+    uint8_t payload[226];
 }__attribute__ ((packed)) mac_frame_header_t; //パディング処理
 
 //loraのフレームヘッダの構造体
@@ -1141,7 +1141,7 @@ void txlora(byte *frame, byte datalen) {
     
     //確認
     print_mac_frame_header(Hello_p);
-    print_mac_frame_payload(Hello_p);
+    //print_mac_frame_payload(Hello_p);
     printf("------------------\n");
 
     
@@ -1169,13 +1169,16 @@ void get_time_now(mac_frame_header_t* hdr){
 
 
 int main (int argc, char *argv[]) {
-    int a = 0;
     /*
     if (argc < 2) {
         printf ("Usage: argv[0] sender|rec [message]\n");
         exit(1);
     }
     */
+    if(!argv[1]){
+        printf("送信回数を設定してください\n");
+        exit(1);
+    }
 
     //hello.SourceAddr=0;
     //mac_frame_header_t hello_packet;
@@ -1247,7 +1250,8 @@ int main (int argc, char *argv[]) {
     Hello_p->seqNum = 0;
     //mac_print_addr(hello->SourceAddr);
     
-    while(1){
+    while(Hello_p->seqNum < atoi(argv[1])){
+    //while(1){
     //時刻を一秒追加
     time(&later);
     later+=1;
@@ -1357,7 +1361,7 @@ int main (int argc, char *argv[]) {
             //////
             Hello_p->seqNum++;
             
-            int num = get_routing_table(Hello_p);
+            //int num = get_routing_table(Hello_p);
             int header_len = sizeof(mac_frame_header_t);
             //int payload_len = num * sizeof(mac_frame_payload_t);
             //printf("%d %d\n",header_len,payload_len);
@@ -1366,7 +1370,11 @@ int main (int argc, char *argv[]) {
             if(header_len>255){
                 printf("最大ペイロードサイズを超えています\n");
                 break;
-            }else {
+            }/*else if(Hello_p->seqNum >atoi(argv[1])+1){
+                printf("end tx\n");
+                exit(1);
+            }*/
+            else {
                 Hello_p->len = header_len;
                 get_time_now(Hello_p);
                 txlora((byte*)&Hello, header_len);
@@ -1384,14 +1392,18 @@ int main (int argc, char *argv[]) {
             printf("%f秒\n",(double)(receiver-sender)/CLOCKS_PER_SEC);
             
             //時間の更新
-            time(&later);
-            later+=1;
+            //time(&later);
+            //later+=1;
             //delay(5000);
         
         }
         
     }
+
 }
+printf("ent tx\n");
+
+
 /*
     if (!strcmp("sender", argv[1])) {
         opmodeLora();

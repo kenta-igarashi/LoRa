@@ -202,6 +202,10 @@ int count=0;
 clock_t sender , receiver;
 time_t current,later;
 
+//現在時刻の取得
+struct timespec ts;
+struct tm tm_tx,tm_rx;
+
 //パケットヘッダの構造体
 typedef struct{
     uint8_t type;//パケットかデータかの識別
@@ -288,7 +292,12 @@ backoff_t* b_st = NULL;
 /*
 mac_frame_header_t hello_packet;
 mac_frame_header_t* hello = (mac_frame_header_t*)&hello_packet;
-* */
+*/
+
+//file open
+FILE *fp;
+char* filename;
+
 uint8_t my_addr[6]={};
 /*ノードの固有値
  * LoRaの物理層から取得はできないため、有線LANのものを取得して使う
@@ -324,88 +333,19 @@ void mac_set_addr(uint8_t*original,uint8_t* target){
 void mac_set_bc_addr(uint8_t* target){
     for(int i = 0; i < 6; i++) target[i] = 0xff;    
 }
-/*
-void mac_tx_frame_header_init(){
-    //mac_lora_frame_header_t* data_hdr = (mac_lora_frame_header_t*)data_frame;
-    //mac_lora_frame_header_t* ctrl_hdr = (mac_lora_frame_header_t*)ctrl_frame;
-    
-    data_hdr->type = DATA;
-    ctrl_hdr->type = BEACON;
-    
-    mac_set_bc_addr(data_hdr->addr1);
-    mac_set_addr(my_addr,data_hdr->addr2);
-    mac_set_bc_addr(data_hdr->addr3);
-    mac_set_bc_addr(data_hdr->addr4);
-
-    mac_set_bc_addr(ctrl_hdr->addr1);
-    mac_set_addr(my_addr,ctrl_hdr->addr2);
-    mac_set_bc_addr(ctrl_hdr->addr3);
-    mac_set_bc_addr(ctrl_hdr->addr4);
-}
-*/
-/*
-void mac_tx_frame_payload_init(){
-    //mac_lora_frame_header_t* data_hdr = (mac_lora_frame_header_t*)data_frame;
-    //mac_lora_frame_header_t* ctrl_hdr = (mac_lora_frame_header_t*)ctrl_frame;
-    //mac_packet_header_t* data_org_hdr = (mac_packet_header_t*)data_hdr->payload;
-    //mac_packet_header_t* ctrl_org_hdr = (mac_packet_header_t*)ctrl_hdr->payload;
-    data_org_hdr->type = DATA;
-    data_org_hdr->len = USER_DATA_FRAME_LEN;
-    ctrl_org_hdr->type = BEACON;
-    ctrl_org_hdr->len = USER_CTRL_FRAME_LEN;
-    /*
-    int i = 0;
-    for(i = 0; i<1460;i++){
-        data_org_hdr->payload[i] = 0x77;
-        ctrl_org_hdr->payload[i] = 0x77;
-    }
-    * */
-//}
-/*
-void mac_tx_frame_header_init(){
-    mac_packet_header_t* data_hdr = (mac_packet_header_t*)data_frame;
-    mac_packet_header_t* ctrl_hdr = (mac_packet_header_t*)ctrl_frame;
-    
-    data_hdr->type = DATA;
-    mac_set_bc_addr(data_hdr->SourceAddr);
-    data_hdr->len = USER_DATA_FRAME_LEN;
-    ctrl_hdr->type = BEACON;
-    mac_set_bc_addr(ctrl_hdr->DestAddr);
-    ctrl_hdr->len = USER_CTRL_FRAME_LEN;
-    ctrl_hdr->seqNum = 0;
-    
-}
-*/
-/*
-void mac_tx_frame_header_init(mac_frame_header_t* hello_pack){
-    mac_frame_header_t* ctrl_hdr =hello_pack;
-
-    ctrl_hdr->type = BEACON;
-    mac_set_bc_addr(ctrl_hdr->SourceAddr);
-    mac_set_bc_addr(ctrl_hdr->DestAddr);
-    ctrl_hdr->len = USER_CTRL_FRAME_LEN;
-    ctrl_hdr->seqNum = 0;
-
-}
-*/
 
 /*mac frameとlora frameの初期化
  */
- 
-void frame_init(uint8_t* hello){//memset
-    for(int i =0;i<255;i++){
-    hello[i]=0;
-}
 
-} 
-void mac_tx_frame_header_init(mac_frame_header_t* hello_pack){
-    mac_frame_header_t* ctrl_hdr =hello_pack;
+void mac_tx_frame_header_init(mac_frame_header_t*hdr){
+    //mac_frame_header_t* ctrl_hdr =hdr;
 
-    ctrl_hdr->type = HELLO;
-    mac_set_bc_addr(ctrl_hdr->SourceAddr);
-    mac_set_bc_addr(ctrl_hdr->DestAddr);
-    ctrl_hdr->len = USER_CTRL_FRAME_LEN;// hdr + payload
-    ctrl_hdr->seqNum = 0;
+    hdr->type = HELLO;
+    mac_set_bc_addr(hdr->SourceAddr);
+    mac_set_bc_addr(hdr->DestAddr);
+    hdr->len = USER_CTRL_FRAME_LEN;// hdr + payload
+    hdr->seqNum = 0;
+    memset(&hdr->time,0,sizeof(struct timespec));
 
 }
 
@@ -786,7 +726,7 @@ void judge_tansfer_data(mac_frame_header_t* packet_p){
         
         //if(is_same_addr(my_addr,packet_p->DestAddr)){//宛先端末が自分の場合
         if(is_same_addr(my_addr,data_p->DestAddr)){//宛先端末が自分の場合
-            for(int i = 0;i<sizeof(data_p->message);i++){
+            for(int i = 0;i<sizeof(data_p->message)/sizeof(data_p->message[0]);i++){
                 message[i] =data_p->message[i];
             }
             printf("payload message: %s\n",message);
@@ -980,14 +920,14 @@ void SetupLoRa()
 
 
 void get_time_now(mac_frame_header_t* hdr){
-    struct timespec ts;
-    struct tm tm_tx,tm_rx;
+    //struct timespec ts;
+    //struct tm tm_tx,tm_rx;
     clock_gettime(CLOCK_REALTIME,&ts);
     localtime_r(&ts.tv_sec,&tm_rx);
     localtime_r(&hdr->time.tv_sec,&tm_tx);
     printf("txtime:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm_tx.tm_year+1900,tm_tx.tm_mon+1,tm_tx.tm_mday,tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec,hdr->time.tv_nsec);
     printf("rxtime:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec,ts.tv_nsec);
-    
+    //printf("difftime:")
 }
 
 
@@ -998,6 +938,9 @@ boolean receive(char *payload) {
     int irqflags = readReg(REG_IRQ_FLAGS);
     
     //  payload crc: 0x20
+    
+    printf("CRC value: %x\n",irqflags & 0x20);
+    
     if((irqflags & 0x20) == 0x20)
     {
         printf("CRC error\n");
@@ -1019,6 +962,41 @@ boolean receive(char *payload) {
     return true;
 }
 
+char* judge_packet_type(mac_frame_header_t* hdr,char* packet_type){
+    if(hdr->type == HELLO){
+        strcpy(packet_type,"HELLO");
+        return  packet_type;
+    }
+    else if(hdr->type == DATA){
+        strcpy(packet_type,"DATA");
+        return  packet_type;
+    }
+    return 0;
+}
+
+void output_data_csv(int packet_RSSI,int RSSI,long int SNR,int length,int count,mac_frame_header_t* hdr){
+    char packet_type[40];
+    if((fp = fopen(filename,"a+")) == NULL){
+        printf("can't open file");
+        exit(1);
+    }
+    //int count=0;
+    //count++;
+    printf("debug\n");
+    printf("packet_RSSI: %d\n",packet_RSSI);
+    fprintf(fp,"%d,%d,%li,%i,%d,,%s,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%u,%u,%d,%02d,%02d,%02d,%02d,%02d,%09ld,%d,%02d,%02d,%02d,%02d,%02d,%09ld\n"
+    ,packet_RSSI,RSSI,SNR,length,count,judge_packet_type(hdr,packet_type)
+    ,hdr->SourceAddr[0],hdr->SourceAddr[1],hdr->SourceAddr[2],hdr->SourceAddr[3],hdr->SourceAddr[4],hdr->SourceAddr[5]
+    ,hdr->DestAddr[0],hdr->DestAddr[1],hdr->DestAddr[2],hdr->DestAddr[3],hdr->DestAddr[4],hdr->DestAddr[5]
+    ,hdr->len,hdr->seqNum
+    ,tm_tx.tm_year+1900,tm_tx.tm_mon+1,tm_tx.tm_mday,tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec,hdr->time.tv_nsec
+    ,tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec,ts.tv_nsec
+    );
+    fclose(fp);
+    
+}
+
+//void receivepacket() {
 void receivepacket() {
 
     long int SNR;
@@ -1026,6 +1004,9 @@ void receivepacket() {
     
     //printf("%x ",digitalRead(dio0));
     //printf("%d\n",readReg(REG_IRQ_FLAGS));
+    int packet_rssi;
+    int rssi;
+    
     
     if(digitalRead(dio0) == 1)
     {
@@ -1053,7 +1034,7 @@ void receivepacket() {
             }
             
             count++;
-            printf("%d\n",count);
+            printf("rx count: %d\n",count);
             
             
             //mac_frame_payload_t* pay_p = (mac_frame_payload_t*)p;
@@ -1061,16 +1042,22 @@ void receivepacket() {
             printf("------------------\n");
             printf("Listening at SF%i on %.6lf Mhz.\n", sf,(double)freq/1000000);
 
-
-            printf("Packet RSSI: %d, ", readReg(0x1A)-rssicorr);
-            printf("RSSI: %d, ", readReg(0x1B)-rssicorr);
+            packet_rssi = readReg(0x1A)-rssicorr;
+            rssi = readReg(0x1B)-rssicorr;
+            
+            //printf("Packet RSSI: %d, ", readReg(0x1A)-rssicorr);
+            printf("Packet RSSI: %d, ", packet_rssi);
+            //printf("RSSI: %d, ", readReg(0x1B)-rssicorr);
+            printf("RSSI: %d, ", rssi);
             printf("SNR: %li, ", SNR);
             printf("Length: %i", (int)receivedbytes);
             printf("\n");
             //printf("Payload: %s\n", message);
             
             print_mac_frame_header(p);
-            print_data_frame(p);
+            output_data_csv(packet_rssi,rssi,SNR,(int)receivedbytes,count,p);
+            
+            //print_data_frame(p);
     
             // sousinsitayatu
             //judge_tansfer_data(p);
@@ -1173,10 +1160,22 @@ void txlora(byte *frame, byte datalen) {
 }
 
 
+void file_open(char* file_name){//file_name = 〇〇.csv
+    //create result file csv
+    //FILE *fp;
+    if((fp = fopen(file_name,"w")) == NULL){
+        printf("can't open %s",file_name);
+        exit(1);
+    }
+    fprintf(fp,"PacketRSSI,RSSI,SNR,Length,tx_seq,,TYPE,srcAddress,srcAddress,srcAddress,srcAddress,srcAddress,srcAddress,destAddress,destAddress,destAddress,destAddress,destAddress,destAddress,length,sequence_num,年,月,日,時,分,秒,nsec,年,月,日,時,分,秒,nsec\n");
+    fclose(fp);
+}
 
 
 int main (int argc, char *argv[]) {
-    int a = 0;
+    //FILE *fp;
+    filename = argv[1];
+    file_open(filename);
     /*
     if (argc < 2) {
         printf ("Usage: argv[0] sender|rec [message]\n");
