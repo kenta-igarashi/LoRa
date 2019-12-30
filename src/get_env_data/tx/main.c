@@ -202,10 +202,6 @@ int count=0;
 clock_t sender , receiver;
 time_t current,later;
 
-//現在時刻の取得
-struct timespec ts;
-struct tm tm_tx,tm_rx;
-
 //パケットヘッダの構造体
 typedef struct{
     uint8_t type;//パケットかデータかの識別
@@ -261,6 +257,7 @@ typedef struct{
     uint8_t size;
 }backoff_t;
     
+      
 /*
 typedef struct{
     uint8_t type;
@@ -293,12 +290,7 @@ backoff_t* b_st = NULL;
 /*
 mac_frame_header_t hello_packet;
 mac_frame_header_t* hello = (mac_frame_header_t*)&hello_packet;
-*/
-
-//file open
-FILE *fp;
-char* filename;
-
+* */
 uint8_t my_addr[6]={};
 /*ノードの固有値
  * LoRaの物理層から取得はできないため、有線LANのものを取得して使う
@@ -334,19 +326,90 @@ void mac_set_addr(uint8_t*original,uint8_t* target){
 void mac_set_bc_addr(uint8_t* target){
     for(int i = 0; i < 6; i++) target[i] = 0xff;    
 }
+/*
+void mac_tx_frame_header_init(){
+    //mac_lora_frame_header_t* data_hdr = (mac_lora_frame_header_t*)data_frame;
+    //mac_lora_frame_header_t* ctrl_hdr = (mac_lora_frame_header_t*)ctrl_frame;
+    
+    data_hdr->type = DATA;
+    ctrl_hdr->type = BEACON;
+    
+    mac_set_bc_addr(data_hdr->addr1);
+    mac_set_addr(my_addr,data_hdr->addr2);
+    mac_set_bc_addr(data_hdr->addr3);
+    mac_set_bc_addr(data_hdr->addr4);
+
+    mac_set_bc_addr(ctrl_hdr->addr1);
+    mac_set_addr(my_addr,ctrl_hdr->addr2);
+    mac_set_bc_addr(ctrl_hdr->addr3);
+    mac_set_bc_addr(ctrl_hdr->addr4);
+}
+*/
+/*
+void mac_tx_frame_payload_init(){
+    //mac_lora_frame_header_t* data_hdr = (mac_lora_frame_header_t*)data_frame;
+    //mac_lora_frame_header_t* ctrl_hdr = (mac_lora_frame_header_t*)ctrl_frame;
+    //mac_packet_header_t* data_org_hdr = (mac_packet_header_t*)data_hdr->payload;
+    //mac_packet_header_t* ctrl_org_hdr = (mac_packet_header_t*)ctrl_hdr->payload;
+    data_org_hdr->type = DATA;
+    data_org_hdr->len = USER_DATA_FRAME_LEN;
+    ctrl_org_hdr->type = BEACON;
+    ctrl_org_hdr->len = USER_CTRL_FRAME_LEN;
+    /*
+    int i = 0;
+    for(i = 0; i<1460;i++){
+        data_org_hdr->payload[i] = 0x77;
+        ctrl_org_hdr->payload[i] = 0x77;
+    }
+    * */
+//}
+/*
+void mac_tx_frame_header_init(){
+    mac_packet_header_t* data_hdr = (mac_packet_header_t*)data_frame;
+    mac_packet_header_t* ctrl_hdr = (mac_packet_header_t*)ctrl_frame;
+    
+    data_hdr->type = DATA;
+    mac_set_bc_addr(data_hdr->SourceAddr);
+    data_hdr->len = USER_DATA_FRAME_LEN;
+    ctrl_hdr->type = BEACON;
+    mac_set_bc_addr(ctrl_hdr->DestAddr);
+    ctrl_hdr->len = USER_CTRL_FRAME_LEN;
+    ctrl_hdr->seqNum = 0;
+    
+}
+*/
+/*
+void mac_tx_frame_header_init(mac_frame_header_t* hello_pack){
+    mac_frame_header_t* ctrl_hdr =hello_pack;
+
+    ctrl_hdr->type = BEACON;
+    mac_set_bc_addr(ctrl_hdr->SourceAddr);
+    mac_set_bc_addr(ctrl_hdr->DestAddr);
+    ctrl_hdr->len = USER_CTRL_FRAME_LEN;
+    ctrl_hdr->seqNum = 0;
+
+}
+*/
 
 /*mac frameとlora frameの初期化
  */
+ 
+void frame_init(uint8_t* hello){//memset
+    for(int i =0;i<255;i++){
+    hello[i]=0;
+}
 
-void mac_tx_frame_header_init(mac_frame_header_t*hdr){
-    //mac_frame_header_t* ctrl_hdr =hdr;
+} 
+void mac_tx_frame_header_init(mac_frame_header_t* hello_pack){
+    mac_frame_header_t* ctrl_hdr =hello_pack;
 
-    hdr->type = HELLO;
-    mac_set_bc_addr(hdr->SourceAddr);
-    mac_set_bc_addr(hdr->DestAddr);
-    hdr->len = USER_CTRL_FRAME_LEN;// hdr + payload
-    hdr->seqNum = 0;
-    memset(&hdr->time,0,sizeof(struct timespec));
+    ctrl_hdr->type = HELLO;
+    mac_set_bc_addr(ctrl_hdr->SourceAddr);
+    mac_set_bc_addr(ctrl_hdr->DestAddr);
+    //ctrl_hdr->len = USER_CTRL_FRAME_LEN;// hdr + payload
+    ctrl_hdr->len = 0;// hdr + payload
+    ctrl_hdr->seqNum = 0;
+    ctrl_hdr->checksum = 0;
 
 }
 
@@ -918,56 +981,6 @@ void SetupLoRa()
 
 }
 
-
-
-void get_time_now(mac_frame_header_t* hdr){
-    //struct timespec ts;
-    //struct tm tm_tx,tm_rx;
-    clock_gettime(CLOCK_REALTIME,&ts);
-    localtime_r(&ts.tv_sec,&tm_rx);
-    localtime_r(&hdr->time.tv_sec,&tm_tx);
-    printf("txtime:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm_tx.tm_year+1900,tm_tx.tm_mon+1,tm_tx.tm_mday,tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec,hdr->time.tv_nsec);
-    printf("rxtime:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec,ts.tv_nsec);
-    //printf("difftime:")
-}
-
-uint16_t checksum(byte* data,int len){
-    register uint32_t sum;
-    register uint16_t *ptr;
-    register int c;
-    
-    sum = 0;
-    ptr = (uint16_t*)data;
-    
-    for(c = len;c > 1;c -= 2){
-        sum += (*ptr);
-        if(sum & 0x800000000){
-            sum = (sum & 0xFFFF) + (sum >> 16);
-        }
-        ptr++;
-    }
-    if(c == 1){
-        uint16_t val;
-        val = 0;
-        memcpy(&val,ptr,sizeof(uint8_t));
-        sum += val;
-    }
-    while(sum >> 16){
-        sum = (sum & 0xFFFF) + (sum >> 16);
-    }
-    return (~sum);
-}
-
-boolean calc_checksum(mac_frame_header_t* hdr,int len){
-    uint16_t prev_checksum = 0;
-    prev_checksum = hdr->checksum;
-    
-    hdr->checksum = 0;
-    return checksum((byte*)hdr,len) == prev_checksum;
-        
-}
-
-
 boolean receive(char *payload) {
     // clear rxDone
     writeReg(REG_IRQ_FLAGS, 0x40);
@@ -975,10 +988,6 @@ boolean receive(char *payload) {
     int irqflags = readReg(REG_IRQ_FLAGS);
     
     //  payload crc: 0x20
-    
-    printf("CRC value: %x\n",irqflags & 0x20);
-    printf("irqflags: %d\n",irqflags);
-    
     if((irqflags & 0x20) == 0x20)
     {
         printf("CRC error\n");
@@ -1000,41 +1009,6 @@ boolean receive(char *payload) {
     return true;
 }
 
-char* judge_packet_type(mac_frame_header_t* hdr,char* packet_type){
-    if(hdr->type == HELLO){
-        strcpy(packet_type,"HELLO");
-        return  packet_type;
-    }
-    else if(hdr->type == DATA){
-        strcpy(packet_type,"DATA");
-        return  packet_type;
-    }
-    return 0;
-}
-
-void output_data_csv(int packet_RSSI,int RSSI,long int SNR,int length,int count,mac_frame_header_t* hdr){
-    char packet_type[40];
-    if((fp = fopen(filename,"a+")) == NULL){
-        printf("can't open file");
-        exit(1);
-    }
-    //int count=0;
-    //count++;
-    printf("debug\n");
-    printf("packet_RSSI: %d\n",packet_RSSI);
-    fprintf(fp,"%d,%d,%li,%i,%d,,%s,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%u,%u,%d,%02d,%02d,%02d,%02d,%02d,%09ld,%d,%02d,%02d,%02d,%02d,%02d,%09ld\n"
-    ,packet_RSSI,RSSI,SNR,length,count,judge_packet_type(hdr,packet_type)
-    ,hdr->SourceAddr[0],hdr->SourceAddr[1],hdr->SourceAddr[2],hdr->SourceAddr[3],hdr->SourceAddr[4],hdr->SourceAddr[5]
-    ,hdr->DestAddr[0],hdr->DestAddr[1],hdr->DestAddr[2],hdr->DestAddr[3],hdr->DestAddr[4],hdr->DestAddr[5]
-    ,hdr->len,hdr->seqNum
-    ,tm_tx.tm_year+1900,tm_tx.tm_mon+1,tm_tx.tm_mday,tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec,hdr->time.tv_nsec
-    ,tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec,ts.tv_nsec
-    );
-    fclose(fp);
-    
-}
-
-//void receivepacket() {
 void receivepacket() {
 
     long int SNR;
@@ -1042,16 +1016,10 @@ void receivepacket() {
     
     //printf("%x ",digitalRead(dio0));
     //printf("%d\n",readReg(REG_IRQ_FLAGS));
-    int packet_rssi;
-    int rssi;
-    
     
     if(digitalRead(dio0) == 1)
     {
         if(receive(message)) {
-            mac_frame_header_t* p = (mac_frame_header_t*)message;
-            //get time now and diff tx to rx
-            get_time_now(p);
             byte value = readReg(REG_PKT_SNR_VALUE);
             if( value & 0x80 ) // The SNR sign bit is 1
             {
@@ -1070,37 +1038,28 @@ void receivepacket() {
             } else {
                 rssicorr = 157;
             }
-            
             count++;
-            printf("rx count: %d\n",count);
+            printf("%d\n",count);
             
-            
+            mac_frame_header_t* p = (mac_frame_header_t*)message;
             //mac_frame_payload_t* pay_p = (mac_frame_payload_t*)p;
             printf("\n");
             printf("------------------\n");
             printf("Listening at SF%i on %.6lf Mhz.\n", sf,(double)freq/1000000);
 
-            packet_rssi = readReg(0x1A)-rssicorr;
-            rssi = readReg(0x1B)-rssicorr;
-            
-            //printf("Packet RSSI: %d, ", readReg(0x1A)-rssicorr);
-            printf("Packet RSSI: %d, ", packet_rssi);
-            //printf("RSSI: %d, ", readReg(0x1B)-rssicorr);
-            printf("RSSI: %d, ", rssi);
+
+            printf("Packet RSSI: %d, ", readReg(0x1A)-rssicorr);
+            printf("RSSI: %d, ", readReg(0x1B)-rssicorr);
             printf("SNR: %li, ", SNR);
             printf("Length: %i", (int)receivedbytes);
             printf("\n");
             //printf("Payload: %s\n", message);
             
-            printf("%d\n",calc_checksum(p,(int)receivedbytes));
-            
-            print_mac_frame_header(p);
-            output_data_csv(packet_rssi,rssi,SNR,(int)receivedbytes,count,p);
-            
+            //print_mac_frame_header(p);
             //print_data_frame(p);
     
             // sousinsitayatu
-            //judge_tansfer_data(p);
+            judge_tansfer_data(p);
             /*
             insert_routing_table(p->SourceAddr, 1, p->seqNum);
             add_routing_table(r_table);
@@ -1124,6 +1083,35 @@ void receivepacket() {
 
     }  //dio0=1;
 }
+
+uint16_t checksum(byte *data,int len){
+    register uint32_t sum;
+    register uint16_t *ptr;
+    register int c;
+    
+    sum = 0;
+    ptr = (uint16_t *)data;
+    
+    for(c = len;c > 1;c -= 2){
+        sum += (*ptr);
+        if(sum & 0x80000000){
+            sum = (sum & 0xFFFF) + (sum >> 16);
+        }
+        ptr++;
+    }
+    if(c == 1){
+        uint16_t val;
+        val = 0;
+        memcpy(&val,ptr,sizeof(uint8_t));
+        sum += val;
+    }
+    while(sum >> 16){
+        sum = (sum & 0xFFFF) + (sum >> 16);
+    }
+    return (~sum);
+    
+}
+
 
 static void configPower (int8_t pw) {
     if (sx1272 == false) {
@@ -1162,6 +1150,11 @@ static void writeBuf(byte addr, byte *value, byte len) {
 
 void txlora(byte *frame, byte datalen) {
 
+    //checksum function
+    Hello_p->checksum = 0;
+    Hello_p->checksum = checksum(frame,(int)datalen);
+    printf("checksum: %u\n",Hello_p->checksum);
+
     // set the IRQ mapping DIO0=TxDone DIO1=NOP DIO2=NOP
     writeReg(RegDioMapping1, MAP_DIO0_LORA_TXDONE|MAP_DIO1_LORA_NOP|MAP_DIO2_LORA_NOP);
     // clear all radio IRQ flags
@@ -1185,43 +1178,50 @@ void txlora(byte *frame, byte datalen) {
     
     //確認
     print_mac_frame_header(Hello_p);
-    print_mac_frame_payload(Hello_p);
+    //print_mac_frame_payload(Hello_p);
     printf("------------------\n");
 
     
     //printf("length: %d\n",sizeof(Hello));
     
-
+    
     for(int i = 0;i<datalen;i++){
         printf("%02x ",frame[i]);
     }
     printf("\n");
     
+/*
+    for(int i = 0;i<datalen;i++){
+        printf("%02x ",frame[i]);
+    }
+    printf("\n");
+  */  
 }
 
-
-void file_open(char* file_name){//file_name = 〇〇.csv
-    //create result file csv
-    //FILE *fp;
-    if((fp = fopen(file_name,"w")) == NULL){
-        printf("can't open %s",file_name);
-        exit(1);
-    }
-    fprintf(fp,"PacketRSSI,RSSI,SNR,Length,tx_seq,,TYPE,srcAddress,srcAddress,srcAddress,srcAddress,srcAddress,srcAddress,destAddress,destAddress,destAddress,destAddress,destAddress,destAddress,length,sequence_num,年,月,日,時,分,秒,nsec,年,月,日,時,分,秒,nsec\n");
-    fclose(fp);
+void get_time_now(mac_frame_header_t* hdr){
+    struct timespec ts;
+    //struct tm tm;
+    clock_gettime(CLOCK_REALTIME,&ts);
+    //localtime_r(&ts.tv_sec,&tm);
+    hdr->time = ts;
+    //printf("sizeof ts:%d",sizeof(ts));
+    //printf("sizeof ts:%10ld",hdr->time.tv_sec);
+    //printf("time %10ld.%09ld CLOCK_REALTIME\n",ts.tv_sec,ts.tv_nsec);
+    //printf("%d/%02d/%02d/ %02d:%02d:%02d.%09ld\n",tm.tm_year+1900,tm.tm_mon+1,tm.tm_mday,tm.tm_hour,tm.tm_min,tm.tm_sec,ts.tv_nsec);
 }
 
 
 int main (int argc, char *argv[]) {
-    //FILE *fp;
-    filename = argv[1];
-    file_open(filename);
     /*
     if (argc < 2) {
         printf ("Usage: argv[0] sender|rec [message]\n");
         exit(1);
     }
     */
+    if(!argv[1]){
+        printf("送信回数を設定してください\n");
+        exit(1);
+    }
 
     //hello.SourceAddr=0;
     //mac_frame_header_t hello_packet;
@@ -1247,12 +1247,25 @@ int main (int argc, char *argv[]) {
 
     wiringPiSPISetup(CHANNEL, 500000);
     
+    /*
     //LoRaを受信モードにセット
     //receiverの設定
     SetupLoRa();
     opmodeLora();
     opmode(OPMODE_STANDBY);
     opmode(OPMODE_RX);
+    */
+    //送信モードに設定
+    
+    //送信モードにセット
+    opmodeLora();
+    // enter standby mode (required for FIFO loading))
+    opmode(OPMODE_STANDBY);
+
+    writeReg(RegPaRamp, (readReg(RegPaRamp) & 0xF0) | 0x08); // set PA ramp-up time 50 uSec
+
+    configPower(23);
+    
     
     //mac_frame_header_t *hello=(mac_frame_header_t*)&hello_packet;
     
@@ -1280,15 +1293,16 @@ int main (int argc, char *argv[]) {
     Hello_p->seqNum = 0;
     //mac_print_addr(hello->SourceAddr);
     
-        
+    while(Hello_p->seqNum < atoi(argv[1])){
+    //while(1){
     //時刻を一秒追加
     time(&later);
     later+=1;
     //while
-    while(1){
+    while(current<=later){
         time(&current);
         //if(current<=later){
-        if(1){
+        if(0){
       
             //時間計測
             //sender=clock();
@@ -1321,11 +1335,13 @@ int main (int argc, char *argv[]) {
             */
             
             
-        }else if(0){
+        }//else if(1){
+        if(current>later){
             //printf("%d\n",count);
             count=0;
             //時間測定
             sender=clock();
+            /*
             //送信モードにセット
             opmodeLora();
             // enter standby mode (required for FIFO loading))
@@ -1336,6 +1352,7 @@ int main (int argc, char *argv[]) {
             configPower(23);
             //printf("value is=%02x\n",readReg(0x31));
             //printf("\n");
+            */
             
             printf("------------------\n");
             printf("Send packets at SF%i on %.6lf Mhz.\n", sf,(double)freq/1000000);
@@ -1387,39 +1404,48 @@ int main (int argc, char *argv[]) {
             //////
             Hello_p->seqNum++;
             
-            int num = get_routing_table(Hello_p);
+            //int num = get_routing_table(Hello_p);
             int header_len = sizeof(mac_frame_header_t);
-            int payload_len = num * sizeof(mac_frame_payload_t);
-            printf("%d %d\n",header_len,payload_len);
-            int total_len = header_len + payload_len;
-            
-            if(total_len>255){
-                printf("送信できる最大ペイロードサイズを超えています\n");
+            //int payload_len = num * sizeof(mac_frame_payload_t);
+            //printf("%d %d\n",header_len,payload_len);
+            //int total_len = header_len + payload_len;
+            printf("total length: %d\n",header_len);
+            if(header_len>255){
+                printf("最大ペイロードサイズを超えています\n");
                 break;
-            }else {
-                Hello_p->len = total_len;
-                txlora((byte*)&Hello, total_len);
+            }/*else if(Hello_p->seqNum >atoi(argv[1])+1){
+                printf("end tx\n");
+                exit(1);
+            }*/
+            else {
+                Hello_p->len = header_len;
+                get_time_now(Hello_p);
+                txlora((byte*)&Hello, (byte)header_len);
             //txlora((byte*)&Hello,40);
             }
-            
+            /*
             //受信モードに切り替え
             SetupLoRa();
             opmodeLora();
             opmode(OPMODE_STANDBY);
             opmode(OPMODE_RX);
-            
+            */
             //時間計測
             receiver = clock();
             printf("%f秒\n",(double)(receiver-sender)/CLOCKS_PER_SEC);
             
             //時間の更新
-            time(&later);
-            later+=1;
+            //time(&later);
+            //later+=1;
             //delay(5000);
         
         }
         
     }
+
+}
+printf("ent tx\n");
+
 
 /*
     if (!strcmp("sender", argv[1])) {

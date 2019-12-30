@@ -152,6 +152,7 @@
 //ハローかパケットかの判別
 #define HELLO 0b10000000 //128
 #define DATA   0b00001000 //8
+#define ACK   0b10001000
 
 #define USER_DATA_FRAME_LEN 1500
 #define USER_CTRL_FRAME_LEN 100
@@ -202,6 +203,7 @@ int count=0;
 clock_t sender , receiver;
 time_t current,later;
 
+
 //パケットヘッダの構造体
 typedef struct{
     uint8_t type;//パケットかデータかの識別
@@ -209,9 +211,8 @@ typedef struct{
     uint8_t DestAddr[6]={};
     uint8_t len;
     uint16_t seqNum;
-    struct timespec time;
     uint16_t checksum;
-    uint8_t payload[4];
+    uint8_t payload[];
 }__attribute__ ((packed)) mac_frame_header_t; //パディング処理
 
 //loraのフレームヘッダの構造体
@@ -225,10 +226,10 @@ typedef struct{
 typedef struct{
     uint8_t srcHop;//現在のホップ数
     uint8_t destHop;
-    uint8_t DestAddr[6];
-    uint16_t seqNum;
+    //uint8_t DestAddr[6];
+    //uint16_t seqNum;
     //unsigned char message[100]; 
-    char message[100]; 
+    char message[20]; 
 }__attribute__((packed))or_data_packet_t;
 
 typedef struct routing_table_entry_struct{
@@ -248,7 +249,7 @@ typedef struct backoff_entry_struct{
     uint8_t srcAddr[6];
     uint16_t seqNum;
     double backoff;
-    uint8_t flag;
+    
     backoff_entry_struct* next;
 }backoff_entry_t;
 
@@ -257,7 +258,19 @@ typedef struct{
     uint8_t size;
 }backoff_t;
     
-      
+typedef struct packet_table_entry_struct{
+    uint8_t srcAddr[6];
+    uint16_t seq;
+    uint8_t flag;
+    packet_table_entry_struct* next;
+    mac_frame_header_t* packet;
+}packet_table_entry_t;
+
+typedef struct{
+    packet_table_entry_t* head;
+    uint8_t size;
+}packet_table_t;
+
 /*
 typedef struct{
     uint8_t type;
@@ -286,7 +299,8 @@ mac_frame_header_t* data_packet = (mac_frame_header_t*)&data;
 mac_frame_header_t *Hello_p=(mac_frame_header_t*)&Hello;
 
 routing_table_t* r_table = NULL;
-backoff_t* b_st = NULL;
+backoff_t* bo_st = NULL;
+packet_table_t* p_table = NULL;
 /*
 mac_frame_header_t hello_packet;
 mac_frame_header_t* hello = (mac_frame_header_t*)&hello_packet;
@@ -326,100 +340,28 @@ void mac_set_addr(uint8_t*original,uint8_t* target){
 void mac_set_bc_addr(uint8_t* target){
     for(int i = 0; i < 6; i++) target[i] = 0xff;    
 }
-/*
-void mac_tx_frame_header_init(){
-    //mac_lora_frame_header_t* data_hdr = (mac_lora_frame_header_t*)data_frame;
-    //mac_lora_frame_header_t* ctrl_hdr = (mac_lora_frame_header_t*)ctrl_frame;
-    
-    data_hdr->type = DATA;
-    ctrl_hdr->type = BEACON;
-    
-    mac_set_bc_addr(data_hdr->addr1);
-    mac_set_addr(my_addr,data_hdr->addr2);
-    mac_set_bc_addr(data_hdr->addr3);
-    mac_set_bc_addr(data_hdr->addr4);
 
-    mac_set_bc_addr(ctrl_hdr->addr1);
-    mac_set_addr(my_addr,ctrl_hdr->addr2);
-    mac_set_bc_addr(ctrl_hdr->addr3);
-    mac_set_bc_addr(ctrl_hdr->addr4);
-}
-*/
-/*
-void mac_tx_frame_payload_init(){
-    //mac_lora_frame_header_t* data_hdr = (mac_lora_frame_header_t*)data_frame;
-    //mac_lora_frame_header_t* ctrl_hdr = (mac_lora_frame_header_t*)ctrl_frame;
-    //mac_packet_header_t* data_org_hdr = (mac_packet_header_t*)data_hdr->payload;
-    //mac_packet_header_t* ctrl_org_hdr = (mac_packet_header_t*)ctrl_hdr->payload;
-    data_org_hdr->type = DATA;
-    data_org_hdr->len = USER_DATA_FRAME_LEN;
-    ctrl_org_hdr->type = BEACON;
-    ctrl_org_hdr->len = USER_CTRL_FRAME_LEN;
-    /*
-    int i = 0;
-    for(i = 0; i<1460;i++){
-        data_org_hdr->payload[i] = 0x77;
-        ctrl_org_hdr->payload[i] = 0x77;
-    }
-    * */
-//}
-/*
-void mac_tx_frame_header_init(){
-    mac_packet_header_t* data_hdr = (mac_packet_header_t*)data_frame;
-    mac_packet_header_t* ctrl_hdr = (mac_packet_header_t*)ctrl_frame;
-    
-    data_hdr->type = DATA;
-    mac_set_bc_addr(data_hdr->SourceAddr);
-    data_hdr->len = USER_DATA_FRAME_LEN;
-    ctrl_hdr->type = BEACON;
-    mac_set_bc_addr(ctrl_hdr->DestAddr);
-    ctrl_hdr->len = USER_CTRL_FRAME_LEN;
-    ctrl_hdr->seqNum = 0;
-    
-}
-*/
-/*
-void mac_tx_frame_header_init(mac_frame_header_t* hello_pack){
-    mac_frame_header_t* ctrl_hdr =hello_pack;
-
-    ctrl_hdr->type = BEACON;
-    mac_set_bc_addr(ctrl_hdr->SourceAddr);
-    mac_set_bc_addr(ctrl_hdr->DestAddr);
-    ctrl_hdr->len = USER_CTRL_FRAME_LEN;
-    ctrl_hdr->seqNum = 0;
-
-}
-*/
 
 /*mac frameとlora frameの初期化
  */
  
-void frame_init(uint8_t* hello){//memset
-    for(int i =0;i<255;i++){
-    hello[i]=0;
+void mac_tx_frame_header_init(mac_frame_header_t* hdr){
+    //mac_frame_header_t* hdr =hello_pack;
+    hdr->type = HELLO;
+    mac_set_bc_addr(hdr->SourceAddr);
+    mac_set_bc_addr(hdr->DestAddr);
+    hdr->len = USER_CTRL_FRAME_LEN;// hdr + payload
+    hdr->seqNum = 0;
+    hdr->checksum = 0;
 }
 
-} 
-void mac_tx_frame_header_init(mac_frame_header_t* hello_pack){
-    mac_frame_header_t* ctrl_hdr =hello_pack;
-
-    ctrl_hdr->type = HELLO;
-    mac_set_bc_addr(ctrl_hdr->SourceAddr);
-    mac_set_bc_addr(ctrl_hdr->DestAddr);
-    //ctrl_hdr->len = USER_CTRL_FRAME_LEN;// hdr + payload
-    ctrl_hdr->len = 0;// hdr + payload
-    ctrl_hdr->seqNum = 0;
-    ctrl_hdr->checksum = 0;
-
-}
-
-void mac_tx_frame_payload_init(mac_frame_header_t* frame){
+void mac_tx_frame_payload_init(mac_frame_header_t* hdr){
     printf("debug\n");
-    mac_frame_payload_t* ctrl_org_hdr = (mac_frame_payload_t*)frame->payload;
+    mac_frame_payload_t* payload = (mac_frame_payload_t*)hdr->payload;
     //byte * p = (byte*)ctrl_org_hdr;
-    ctrl_org_hdr->Hop= 0;
-    mac_set_bc_addr(ctrl_org_hdr->DestAddr);
-    ctrl_org_hdr->seqNum = 0;
+    payload->Hop= 0;
+    mac_set_bc_addr(payload->DestAddr);
+    payload->seqNum = 0;
     /*
     for(int i = 0 ;i<10;i++){
         printf("%02x ",p[i]);
@@ -428,33 +370,33 @@ void mac_tx_frame_payload_init(mac_frame_header_t* frame){
     */
 }
 void mac_tx_frame_data_init(mac_frame_header_t* frame){
-    or_data_packet_t* data_frame = (or_data_packet_t*)frame->payload;
+    or_data_packet_t* data_frame = (or_data_packet_t*)frame;
     data_frame->srcHop = 0;
     data_frame->destHop = 0;
-    mac_set_bc_addr(data_frame->DestAddr);
-    data_frame->seqNum = 0;
+    //mac_set_bc_addr(data_frame->DestAddr);
+    //data_frame->seqNum = 0;
     memset(&(data_frame->message),0,sizeof(message));
 }
 
 void print_mac_frame_header(mac_frame_header_t* data){
-    printf("mac packet header: \n");
+    printf("mac packet header   : \n");
     if(data->type == HELLO) printf("type: HELLO\n");
-    else printf("type: DATA\n");
+    else printf("type                : DATA\n");
     //printf("type: %u\n",data->type);
-    printf("Source ");
+    printf("Source      ");
     mac_print_addr(data->SourceAddr);
     printf("Destination ");
     mac_print_addr(data->DestAddr);
-    printf("length: %u\n",data->len);
-    printf("sequence number: %u\n",data->seqNum);
-    printf("payload: %s\n",data->payload);
+    printf("length              : %u\n",data->len);
+    printf("sequence number     : %u\n",data->seqNum);
+    printf("payload             : %s\n",data->payload);
     printf("\n");
 }
 
 void print_mac_frame_payload(mac_frame_header_t* data){
     mac_frame_payload_t* packet = (mac_frame_payload_t*)data->payload;
     //byte* p = (byte*)packet;
-    printf("lora packet header: \n");
+    printf("mac frame payload: \n");
     printf("Hop: %u\n",packet->Hop);
     printf("Destination ");
     mac_print_addr(packet->DestAddr);
@@ -468,11 +410,11 @@ void print_mac_frame_payload(mac_frame_header_t* data){
     */
 }
 
-boolean is_smaller_addr(uint8_t* addr1,uint8_t* addr2){
+boolean is_smaller_addr(uint8_t* origin,uint8_t* target){
     for(int i = 0 ;i<6;i++){
-        if(addr1[i]<addr2[i]){ //addr1=origin 
+        if(origin[i]<target[i]){ //addr1=origin 
             return true;
-        }else if(addr1[i]>addr2[i]){
+        }else if(origin[i]>target[i]){
             return false;
         }
     }
@@ -481,11 +423,8 @@ boolean is_smaller_addr(uint8_t* addr1,uint8_t* addr2){
 
 boolean is_same_addr(uint8_t* origin,uint8_t* target){
     for(int i =0;i<6;i++){
-        //mac_print_addr(origin);
-        //mac_print_addr(target);
         if(origin[i]!=target[i]) return false;
     }
-
     return true;
 }
 void insert_routing_table(uint8_t* addr,uint8_t hop,uint8_t seq){
@@ -634,7 +573,7 @@ int get_routing_table(mac_frame_header_t* hello){
 
 void print_routing_table(routing_table_t* routing_t){
     routing_table_entry_t* current =routing_t->head;
-    printf("routing table is:\n");
+    printf("----------routing table----------\n");
     //routing_table_entry_t* current = r_table->head;
     int i =1;
     if(!current){ //current==NULL
@@ -650,17 +589,18 @@ void print_routing_table(routing_table_t* routing_t){
         i++;
         current = current->next;
     }
+    printf("---------------end----------------\n");
     
 }
 
 void print_data_frame(mac_frame_header_t* packet){
     or_data_packet_t* data_frame = (or_data_packet_t*)packet->payload;
     printf("data: \n");
-    printf("src hop: %u\n",data_frame->srcHop);
-    printf("dest hop: %u\n",data_frame->destHop);
-    printf("Destination ");
-    mac_print_addr(data_frame->DestAddr);
-    printf("sequence number: %u\n",data_frame->seqNum);
+    printf("src hop         : %u\n",data_frame->srcHop);
+    printf("dest hop        : %u\n",data_frame->destHop);
+    //printf("dest    ");
+    //mac_print_addr(data_frame->DestAddr);
+    //printf("suequence number: %u\n",data_frame->seqNum);
 }
 
 void add_routing_table(routing_table_t* routing_t){
@@ -683,10 +623,105 @@ boolean is_smaller_backoff(double origin,double target){
     else if(origin>target) return false;
     return false;
 }
-void add_queue_backoff(uint8_t* srcAddr,uint16_t seq,double backoff,uint8_t flag){
-    backoff_entry_t* current = b_st->head;
-    backoff_entry_t* previous = NULL;
+
+
+boolean is_same_seq(uint16_t origin,uint16_t target){
+    if(origin!=target) return false;
+    return true;
+}
+
+void print_packet_table(){
+    packet_table_entry_t* current = p_table->head;
+    printf("----------packet table----------\n");
+    int i =1;
+    if(!current){ //current==NULL
+        printf("data nothing\n");
+        return ;
+    }
+    while(current){//current!=NULL
+        printf("Node%d ",i);
+        mac_print_addr(current->srcAddr);
+        printf("Sequence Number: %u\n",current->seq);
+        printf("flag           : %u",current->flag);
+        printf("table size     : %d\n",p_table->size);
+        i++;
+        current = current->next;
+    }
+    printf("---------------end--------------\n");
+
+}
+
+void print_backoff_table(){
+    backoff_entry_t* current = bo_st->head;
+    printf("----------backoff table----------\n");
+    int i = 0;
+    if(!current){
+        printf("data nothing\n");
+        return;
+    }
+    while(current){
+        printf("Node%d\n",i);
+        printf("");
+    }
+    printf("---------------end---------------\n");
     
+    
+}
+packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_frame_header_t* packet){//,uint8_t flag){
+    packet_table_entry_t* current = p_table->head;
+    packet_table_entry_t* prev = NULL;
+    
+    while(current && is_smaller_addr(current->srcAddr,srcAddr)){
+        prev = current;
+        current = current->next;
+
+    }
+    //while(current && is_smaller_seq(current->seq,seq)){
+    while(current && is_same_addr(current->srcAddr,srcAddr) && current->seq < seq){
+        prev = current;
+        current = current->next;
+    }
+    
+    if(current && is_same_seq(current->seq,seq)){
+        /*
+        //update
+        printf("data update\n");
+        if(current->flag == DATA){
+            current->
+        }
+        */
+        return current;
+    }else{
+        //insert
+        printf("insert packet table\n");
+        packet_table_entry_t* new_entry = (packet_table_entry_t* )malloc(sizeof(packet_table_entry_t));
+        memset(new_entry, 0, sizeof(packet_table_entry_t));
+        //packet save 要注意！！！！！
+        
+        //new_entry->packet = (byte*)malloc((int)packet->len);
+        new_entry->packet = (mac_frame_header_t*)malloc((int)packet->len);
+        memcpy(new_entry->packet,packet,(int)packet->len);
+
+        mac_set_addr(srcAddr, new_entry->srcAddr);
+        new_entry->seq = seq;
+        new_entry->flag = DATA ;//1 = data , 2 = ack
+        new_entry->next = NULL;
+        (p_table)->size++;
+        
+        if(!prev){
+            new_entry->next = p_table->head;
+            p_table->head = new_entry;            
+        }else{
+            new_entry->next = prev->next;
+            prev->next = new_entry;
+        }
+    }
+    return NULL;
+}
+
+void insert_backoff(uint8_t* srcAddr,uint16_t seq,double backoff){//,uint8_t flag){
+    backoff_entry_t* current = bo_st->head;
+    backoff_entry_t* previous = NULL;
     while(current && is_smaller_backoff(current->backoff,backoff)){
         previous = current;
         current = current->next;
@@ -700,13 +735,12 @@ void add_queue_backoff(uint8_t* srcAddr,uint16_t seq,double backoff,uint8_t flag
         new_entry->backoff = backoff;
         mac_set_addr(srcAddr, new_entry->srcAddr);
         new_entry->seqNum = seq;
-        //new_entry->flag = ;
         new_entry->next = NULL;
-        (b_st)->size++;
+        (bo_st)->size++;
         
         if(!previous){
-            new_entry->next = b_st->head;
-            b_st->head = new_entry;            
+            new_entry->next = bo_st->head;
+            bo_st->head = new_entry;            
         }else{
             new_entry->next = previous->next;
             previous->next = new_entry;
@@ -715,124 +749,10 @@ void add_queue_backoff(uint8_t* srcAddr,uint16_t seq,double backoff,uint8_t flag
     return ;
 } 
 
-void insert_backoff(uint8_t* srcAddr,uint16_t seq,double backoff,uint8_t flag){
-    backoff_entry_t* current = b_st->head;
-    backoff_entry_t* previous = NULL;
-    
-    while(current && is_smaller_backoff(current->backoff,backoff)){
-        previous = current;
-        current = current->next;
-    }
+void dequeue(){
 
-    if(1){
-        //insert
-        backoff_entry_t* new_entry = (backoff_entry_t* )malloc(sizeof(backoff_entry_t));
-        memset(new_entry, 0, sizeof(backoff_entry_t));
-
-        new_entry->backoff = backoff;
-        mac_set_addr(srcAddr, new_entry->srcAddr);
-        new_entry->seqNum = seq;
-        //new_entry->flag = ;
-        new_entry->next = NULL;
-        (b_st)->size++;
-        
-        if(!previous){
-            new_entry->next = b_st->head;
-            b_st->head = new_entry;            
-        }else{
-            new_entry->next = previous->next;
-            previous->next = new_entry;
-        }
-    }
-    return ;
     
 }
-
-double sigmoid(double gain, double x){
-    return (1.0 / (1.0 + exp(-gain * x)));
-}
-
-double OR_calculate_backoff(or_data_packet_t* hdr,uint8_t hop){
-    //or_data_packet_t* data_p = (mac_frame)
-    struct timeval tv;
-    gettimeofday(&tv,NULL);
-    srand((unsigned int)tv.tv_sec * ((unsigned int)tv.tv_usec + 1));
-    double expected = (double)hdr->destHop - 1;
-    double table = (double)hop;
-    double gain = 1.0;
-    double alpha = 1.0;
-    double beta = 1.0;
-    double difference = (table - expected) - alpha;
-    
-    double base_backoff = 500;//ミリ秒
-    double backoff = 0;
-    double max_backoff = base_backoff * 2;
-    
-    double max_random_backoff = (max_backoff) * (sigmoid(gain, difference + beta) - sigmoid(gain,difference));
-    backoff += max_backoff * sigmoid(gain,difference);
-    
-    if(max_random_backoff != 0){
-        backoff += rand() % (int)max_random_backoff;
-    }else{
-        backoff += rand() % (10 * 1000);
-    }
-    return backoff;
-}
-
-void judge_tansfer_data(mac_frame_header_t* packet_p){
-    //mac_frame_header_t* packet_p = (mac_frame_header_t*)&packet;
-    or_data_packet_t* data_p = (or_data_packet_t*)packet_p->payload;
-    routing_table_entry_t* current = r_table->head;
-    if(packet_p->type == DATA){
-        
-            print_mac_frame_header(packet_p);
-            print_data_frame(packet_p);
-        
-        //if(is_same_addr(my_addr,packet_p->DestAddr)){//宛先端末が自分の場合
-        if(is_same_addr(my_addr,data_p->DestAddr)){//宛先端末が自分の場合
-            for(int i = 0;i<sizeof(data_p->message);i++){
-                message[i] =data_p->message[i];
-            }
-            printf("payload message: %s\n",message);
-        }else{//自分ではない場合
-            printf("transfer data\n");
-            //転送待機時間の算出
-            while(current && is_same_addr(current->addr,data_p->DestAddr)){//宛先端末のホップ数を調べる
-                current = current->next;
-            }
-            insert_backoff(packet_p->SourceAddr,data_p->seqNum,OR_calculate_backoff(data_p,current->hop),1);
-            //delay(OR_calculate_backoff(data_p,current->hop));//待機
-            //再送制御
-            
-            
-            
-            //insert_routing_table(packet_p->SourceAddr,,
-            /*
-            int num = get_routing_table(Hello_p);
-            int header_len = sizeof(mac_frame_header_t);
-            int payload_len = num * sizeof(mac_frame_data_t);
-            printf("%d %d\n",header_len,payload_len);
-            int total_len = header_len + payload_len;
-            Hello_p->len = total_len;
-            txlora((byte*)&packet, total_len);
-            txlora
-            */
-        }
-    }
-    else if(packet_p->type == HELLO){
-        print_mac_frame_header(packet_p);
-        print_mac_frame_payload(packet_p);
-        
-        insert_routing_table(packet_p->SourceAddr, 1, packet_p->seqNum);
-        add_routing_table(r_table);
-        print_routing_table(r_table);
-    }
-}
-
-void print_payload_data(){
-    printf("message: %s\n",message);
-}
-    
 
 void die(const char *s)
 {
@@ -981,6 +901,136 @@ void SetupLoRa()
 
 }
 
+uint16_t checksum(byte *data,int len){
+    register uint32_t sum;
+    register uint16_t *ptr;
+    register int c;
+    
+    sum = 0;
+    ptr = (uint16_t *)data;
+    
+    for(c = len;c > 1;c -= 2){
+        sum += (*ptr);
+        if(sum & 0x80000000){
+            sum = (sum & 0xFFFF) + (sum >> 16);
+        }
+        ptr++;
+    }
+    if(c == 1){
+        uint16_t val;
+        val = 0;
+        memcpy(&val,ptr,sizeof(uint8_t));
+        sum += val;
+    }
+    while(sum >> 16){
+        sum = (sum & 0xFFFF) + (sum >> 16);
+    }
+    return (~sum);
+    
+}
+
+boolean calc_checksum(mac_frame_header_t* hdr,int len){
+    uint16_t prev_checksum = 0;
+    prev_checksum = hdr->checksum;
+    
+    hdr->checksum = 0;
+    uint16_t current = checksum((byte*)hdr,len);
+    printf("origin(tx):%u\n",prev_checksum);
+    printf("rx        :%u\n",current);
+    return current == prev_checksum;
+}
+
+double sigmoid(double gain, double x){
+    return (1.0 / (1.0 + exp(-gain * x)));
+}
+
+double OR_calculate_backoff(uint8_t desthop,uint8_t hop){
+    //or_data_packet_t* data_p = (mac_frame)
+    struct timeval tv;
+    gettimeofday(&tv,NULL);
+    srand((unsigned int)tv.tv_sec * ((unsigned int)tv.tv_usec + 1));
+    double expected = (double)desthop - 1;
+    double table = (double)hop;
+    double gain = 1.0;
+    double alpha = 1.0;
+    double beta = 1.0;
+    double difference = (table - expected) - alpha;
+    
+    double base_backoff = 500;//ミリ秒
+    double backoff = 0;
+    double max_backoff = base_backoff * 2;
+    
+    double max_random_backoff = (max_backoff) * (sigmoid(gain, difference + beta) - sigmoid(gain,difference));
+    backoff += max_backoff * sigmoid(gain,difference);
+    printf("difference        :%lf\n",difference);
+    printf("max random backoff:%lf\n",max_random_backoff);
+
+    if(max_random_backoff != 0){
+        backoff += rand() % (int)max_random_backoff;
+    }else{
+        backoff += rand() % (10 * 1000);
+    }
+    return backoff;
+}
+
+void judge_transfer_data(mac_frame_header_t *packet_p){
+    //mac_frame_header_t* packet_p = (mac_frame_header_t*)&packet;
+    or_data_packet_t* data_p = (or_data_packet_t*)packet_p->payload;
+    routing_table_entry_t* current = r_table->head;
+    if(packet_p->type == DATA){
+            //printf("debug\n");
+            print_mac_frame_header(packet_p);
+            print_data_frame(packet_p);
+            
+        //if(is_same_addr(my_addr,packet_p->DestAddr)){//宛先端末が自分の場合
+        if(is_same_addr(my_addr,packet_p->DestAddr)){//宛先端末が自分の場合
+            for(int i = 0;i<sizeof(data_p->message)/sizeof(data_p->message[0]);i++){
+                message[i] =data_p->message[i];
+            }
+            printf("payload message : %s\n",message);
+        }else{//自分ではない場合
+            printf("transfer data\n");
+            
+            while(current && !is_same_addr(current->addr,packet_p->DestAddr)){//宛先端末のホップ数を調べる
+                current = current->next;
+            }
+            
+            if(current){
+                packet_table_entry_t* p_entry = insert_packet_table(packet_p->SourceAddr,packet_p->seqNum,packet_p);
+                if(p_entry){//受信済み
+                    if(current->hop >= data_p->destHop){
+                        p_entry->flag = ACK;
+                    }
+                }
+                else{//未受信
+                    //転送待機時間の算出
+                    
+                        double bo = OR_calculate_backoff(data_p->destHop,current->hop);
+                        insert_backoff(packet_p->SourceAddr,packet_p->seqNum,bo);
+                
+                    
+                }
+            
+              //printf("debug\n");
+
+            }
+        }
+    }
+    else if(packet_p->type == HELLO){
+        print_mac_frame_header(packet_p);
+        print_mac_frame_payload(packet_p);
+        
+        insert_routing_table(packet_p->SourceAddr, 1, packet_p->seqNum);
+        add_routing_table(r_table);
+        print_routing_table(r_table);
+    }
+    else{
+        printf("ここじゃないよ\n");
+    }
+}
+
+
+
 boolean receive(char *payload) {
     // clear rxDone
     writeReg(REG_IRQ_FLAGS, 0x40);
@@ -1020,6 +1070,13 @@ void receivepacket() {
     if(digitalRead(dio0) == 1)
     {
         if(receive(message)) {
+            mac_frame_header_t* p = (mac_frame_header_t*)message;
+            //checksum function
+            if(!calc_checksum(p,(int)receivedbytes)){
+                printf("パケットを破棄します.\n");
+                
+            }else{
+            
             byte value = readReg(REG_PKT_SNR_VALUE);
             if( value & 0x80 ) // The SNR sign bit is 1
             {
@@ -1039,9 +1096,9 @@ void receivepacket() {
                 rssicorr = 157;
             }
             count++;
-            printf("%d\n",count);
+            printf("rx count: %d\n",count);
             
-            mac_frame_header_t* p = (mac_frame_header_t*)message;
+    
             //mac_frame_payload_t* pay_p = (mac_frame_payload_t*)p;
             printf("\n");
             printf("------------------\n");
@@ -1056,15 +1113,15 @@ void receivepacket() {
             //printf("Payload: %s\n", message);
             
             //print_mac_frame_header(p);
-            //print_data_frame(p);
-    
+            //print_mac_frame_payload(p);
+
             // sousinsitayatu
-            judge_tansfer_data(p);
+            judge_transfer_data(p);
             /*
             insert_routing_table(p->SourceAddr, 1, p->seqNum);
             add_routing_table(r_table);
             print_routing_table(r_table);
-            */
+*/
             // payload no entry list.
             /*num_entry = p->len - sizeof(mac_frame_header_t) / sizeof(mac_lora_frame_header_t);
 
@@ -1080,38 +1137,9 @@ void receivepacket() {
             printf("\n");
             
         } // received a message
-
+    }
     }  //dio0=1;
 }
-
-uint16_t checksum(byte *data,int len){
-    register uint32_t sum;
-    register uint16_t *ptr;
-    register int c;
-    
-    sum = 0;
-    ptr = (uint16_t *)data;
-    
-    for(c = len;c > 1;c -= 2){
-        sum += (*ptr);
-        if(sum & 0x80000000){
-            sum = (sum & 0xFFFF) + (sum >> 16);
-        }
-        ptr++;
-    }
-    if(c == 1){
-        uint16_t val;
-        val = 0;
-        memcpy(&val,ptr,sizeof(uint8_t));
-        sum += val;
-    }
-    while(sum >> 16){
-        sum = (sum & 0xFFFF) + (sum >> 16);
-    }
-    return (~sum);
-    
-}
-
 
 static void configPower (int8_t pw) {
     if (sx1272 == false) {
@@ -1148,11 +1176,13 @@ static void writeBuf(byte addr, byte *value, byte len) {
     unselectreceiver();                                                                                 
 }
 
+
 void txlora(byte *frame, byte datalen) {
 
     //checksum function
+    Hello_p->checksum = 0;//送信するたびに0に初期化しないと値が一致しない
     Hello_p->checksum = checksum(frame,(int)datalen);
-
+    printf("checksum: %u\n",Hello_p->checksum);
 
     // set the IRQ mapping DIO0=TxDone DIO1=NOP DIO2=NOP
     writeReg(RegDioMapping1, MAP_DIO0_LORA_TXDONE|MAP_DIO1_LORA_NOP|MAP_DIO2_LORA_NOP);
@@ -1177,38 +1207,68 @@ void txlora(byte *frame, byte datalen) {
     
     //確認
     print_mac_frame_header(Hello_p);
-    //print_mac_frame_payload(Hello_p);
+    print_mac_frame_payload(Hello_p);
     printf("------------------\n");
 
     
     //printf("length: %d\n",sizeof(Hello));
     
-    
+
     for(int i = 0;i<datalen;i++){
         printf("%02x ",frame[i]);
     }
     printf("\n");
     
-/*
-    for(int i = 0;i<datalen;i++){
-        printf("%02x ",frame[i]);
+}
+
+
+void print_payload_data(){
+    printf("message: %s\n",message);
+}
+    
+void routing_table_init(){
+    r_table = (routing_table_t *) malloc(sizeof(routing_table_t));
+    r_table->size=0;
+    r_table->head = NULL;
+}
+void backoff_struct_init(){
+    bo_st = (backoff_t*)malloc(sizeof(backoff_t));
+    bo_st->size=0;
+    bo_st->head=NULL;
+}
+void packet_table_init(){
+    p_table = (packet_table_t*)malloc(sizeof(packet_table_t));
+    p_table->size=0;
+    p_table->head = NULL;
+}
+
+packet_table_entry_t* check_packet_table(uint8_t *srcAddr,uint16_t seq){//,uint8_t flag){
+    packet_table_entry_t* current = p_table->head;
+    packet_table_entry_t* prev = NULL;
+    
+    while(current && is_smaller_addr(current->srcAddr,srcAddr)){
+        prev = current;
+        current = current->next;
+
     }
-    printf("\n");
-  */  
+    //while(current && is_smaller_seq(current->seq,seq)){
+    while(current && is_same_addr(current->srcAddr,srcAddr) && current->seq < seq){
+        prev = current;
+        current = current->next;
+    }
+    
+    if(current && is_same_seq(current->seq,seq)){
+        return current;
+    }
+
+    return NULL;
 }
 
-void get_time_now(mac_frame_header_t* hdr){
-    struct timespec ts;
-    //struct tm tm;
-    clock_gettime(CLOCK_REALTIME,&ts);
-    //localtime_r(&ts.tv_sec,&tm);
-    hdr->time = ts;
-    //printf("sizeof ts:%d",sizeof(ts));
-    //printf("sizeof ts:%10ld",hdr->time.tv_sec);
-    //printf("time %10ld.%09ld CLOCK_REALTIME\n",ts.tv_sec,ts.tv_nsec);
-    //printf("%d/%02d/%02d/ %02d:%02d:%02d.%09ld\n",tm.tm_year+1900,tm.tm_mon+1,tm.tm_mday,tm.tm_hour,tm.tm_min,tm.tm_sec,ts.tv_nsec);
+int return_backoff_time(double backoff){
+    printf("backoff time = %lf\n",backoff);
+    
+    return backoff;
 }
-
 
 int main (int argc, char *argv[]) {
     /*
@@ -1217,28 +1277,16 @@ int main (int argc, char *argv[]) {
         exit(1);
     }
     */
-    if(!argv[1]){
-        printf("送信回数を設定してください\n");
-        exit(1);
-    }
-
-    //hello.SourceAddr=0;
-    //mac_frame_header_t hello_packet;
-    
-    //mac_packet_header_t *hello=&ctrl_frame;
-  /*
-    byte hello_packet[1000];
-    for(int i =0;i<1000;i++){
-        hello_packet[i]=0;
-    }
-  */
-    //mac_frame_header_t *Hello_p=(mac_frame_header_t*)&Hello;
-    
+  
     //routing_table init function
-    r_table = (routing_table_t *) malloc(sizeof(routing_table_t));
-    r_table->size=0;
-    r_table->head = NULL;
- 
+    routing_table_init();
+    
+    //backoff init function
+    backoff_struct_init();
+    
+    //packet table init function (backoff)
+    packet_table_init();
+    
     wiringPiSetup () ;
     pinMode(ssPin, OUTPUT);
     pinMode(dio0, INPUT);
@@ -1246,28 +1294,12 @@ int main (int argc, char *argv[]) {
 
     wiringPiSPISetup(CHANNEL, 500000);
     
-    /*
     //LoRaを受信モードにセット
     //receiverの設定
     SetupLoRa();
     opmodeLora();
     opmode(OPMODE_STANDBY);
     opmode(OPMODE_RX);
-    */
-    //送信モードに設定
-    
-    //送信モードにセット
-    opmodeLora();
-    // enter standby mode (required for FIFO loading))
-    opmode(OPMODE_STANDBY);
-
-    writeReg(RegPaRamp, (readReg(RegPaRamp) & 0xF0) | 0x08); // set PA ramp-up time 50 uSec
-
-    configPower(23);
-    
-    
-    //mac_frame_header_t *hello=(mac_frame_header_t*)&hello_packet;
-    
 
     //printf("%d\n",sizeof(mac_frame_header_t));
     //printf("value is=%02x\n",readReg(0x31));
@@ -1277,32 +1309,28 @@ int main (int argc, char *argv[]) {
     memset(&data[0],0,sizeof(data));
     mac_tx_frame_header_init(Hello_p);
     //mac_tx_frame_payload_init();
-    //mac_tx_frame_payload_init(Hello_p);
-    memset(&(Hello_p->payload[0]),0,sizeof(Hello_p->payload));
-    
+    mac_tx_frame_payload_init(Hello_p);
+   
     //自身のmacアドレスの取得
 	get_my_mac_addr();
     printf("my ");
 	mac_print_addr(my_addr);
     //printf("-----------------------------\n");
-     
+    
     //仮のデータ挿入
     Hello_p->type = HELLO;
     mac_set_addr(my_addr,Hello_p->SourceAddr);
     Hello_p->seqNum = 0;
     //mac_print_addr(hello->SourceAddr);
     
-    while(Hello_p->seqNum < atoi(argv[1])){
-    //while(1){
     //時刻を一秒追加
     time(&later);
     later+=1;
     //while
-    while(current<=later){
+    while(1){
         time(&current);
-        //if(current<=later){
-        if(0){
-      
+        if(current<=later){
+        //if(1){
             //時間計測
             //sender=clock();
             
@@ -1314,33 +1342,38 @@ int main (int argc, char *argv[]) {
             //while(flag==true) {
                 //printf("rec\n");
                 
-                
                 receivepacket(); 
-                
                 
                 //delay(100);
                 //delay(1);
            // }
-            /*
-            if(current>b_st->head->backoff){
-                int num = get_routing_table(Hello_p);
-                int header_len = sizeof(mac_frame_header_t);
-                int payload_len = num * sizeof(or_data_packet_t);
-                printf("%d %d\n",header_len,payload_len);
-                int total_len = header_len + payload_len;
-                Hello_p->len = total_len;
-                txlora((byte*)&Hello, total_len);
+           //printf("debugだよ\n");
+           
+            //return_backoff_time(bo_st->head->backoff);
+            if(bo_st->head && (current <= bo_st->head->backoff)){
+                packet_table_entry_t* p_entry = check_packet_table(bo_st->head->srcAddr,bo_st->head->seqNum);
+                if(p_entry->flag != ACK){
+                    routing_table_entry_t* r_entry = r_table->head;
+                    
+                        while(r_entry && !is_same_addr(r_entry->addr,p_entry->packet->DestAddr)){//宛先端末のホップ数を調べる
+                            r_entry = r_entry->next;
+                        }
+                    
+                    //再送する場合は要修正
+                     ((or_data_packet_t*)p_entry->packet->payload)->srcHop ++;
+                    ((or_data_packet_t*)p_entry->packet->payload)->destHop = r_entry->hop;
+    
+                    txlora((byte*)&p_entry->packet,(byte)p_entry->packet->len);
+                }
             }
-            */
             
             
-        }//else if(1){
-        if(current>later){
+            
+        }else {
             //printf("%d\n",count);
             count=0;
             //時間測定
             sender=clock();
-            /*
             //送信モードにセット
             opmodeLora();
             // enter standby mode (required for FIFO loading))
@@ -1351,7 +1384,6 @@ int main (int argc, char *argv[]) {
             configPower(23);
             //printf("value is=%02x\n",readReg(0x31));
             //printf("\n");
-            */
             
             printf("------------------\n");
             printf("Send packets at SF%i on %.6lf Mhz.\n", sf,(double)freq/1000000);
@@ -1403,48 +1435,33 @@ int main (int argc, char *argv[]) {
             //////
             Hello_p->seqNum++;
             
-            //int num = get_routing_table(Hello_p);
+            int num = get_routing_table(Hello_p);
             int header_len = sizeof(mac_frame_header_t);
-            //int payload_len = num * sizeof(mac_frame_payload_t);
-            //printf("%d %d\n",header_len,payload_len);
-            //int total_len = header_len + payload_len;
-            printf("total length: %d\n",header_len);
-            if(header_len>255){
-                printf("最大ペイロードサイズを超えています\n");
-                break;
-            }/*else if(Hello_p->seqNum >atoi(argv[1])+1){
-                printf("end tx\n");
-                exit(1);
-            }*/
-            else {
-                Hello_p->len = header_len;
-                get_time_now(Hello_p);
-                txlora((byte*)&Hello, header_len);
-            //txlora((byte*)&Hello,40);
-            }
-            /*
+            int payload_len = num * sizeof(mac_frame_payload_t);
+            printf("%d %d\n",header_len,payload_len);
+            int total_len = header_len + payload_len;
+            Hello_p->len = total_len;
+            txlora((byte*)&Hello, total_len);
+            
+            
             //受信モードに切り替え
             SetupLoRa();
             opmodeLora();
             opmode(OPMODE_STANDBY);
             opmode(OPMODE_RX);
-            */
+            
             //時間計測
             receiver = clock();
             printf("%f秒\n",(double)(receiver-sender)/CLOCKS_PER_SEC);
             
             //時間の更新
-            //time(&later);
-            //later+=1;
+            time(&later);
+            later+=2;
             //delay(5000);
         
         }
         
     }
-
-}
-printf("ent tx\n");
-
 
 /*
     if (!strcmp("sender", argv[1])) {
