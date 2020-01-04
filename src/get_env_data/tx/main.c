@@ -1095,12 +1095,13 @@ void output_data_csv(mac_frame_header_t* hdr){
 
 void txlora(byte *frame, byte datalen) {
 
+    get_time_now(Hello_p);
+    
     //checksum function
     Hello_p->checksum = 0;
     Hello_p->checksum = checksum(frame,(int)datalen);
     printf("checksum: %u\n",Hello_p->checksum);
     
-    get_time_now(Hello_p);
     output_data_csv((mac_frame_header_t*)frame);
     // set the IRQ mapping DIO0=TxDone DIO1=NOP DIO2=NOP
     writeReg(RegDioMapping1, MAP_DIO0_LORA_TXDONE|MAP_DIO1_LORA_NOP|MAP_DIO2_LORA_NOP);
