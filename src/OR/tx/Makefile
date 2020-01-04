@@ -2,7 +2,7 @@
 # Single lora testing app
 
 CC=g++
-CFLAGS=-c -Wall
+CFLAGS=-c -Wall -lm
 LIBS=-lwiringPi
 
 all: dragino_lora_app

@@ -260,24 +260,6 @@ typedef struct{
     backoff_entry_t* head;
     uint8_t size;
 }backoff_t;
-    
-/*
-typedef struct{
-    uint8_t type;
-    uint8_t flag;
-    uint16_t duration;
-    uint8_t addr1[6];
-    uint8_t addr2[6];
-    uint8_t addr3[6];
-    uint8_t seqCtrl;
-    uint8_t addr4[6];
-    uint8_t payload[];
-}__attribute__((packed)) mac_lora_frame_header_t;
-*/
-
-
-//uint8_t data_frame[]={};
-//uint8_t ctrl_frame[]={};
 
 /*固定長の配列を宣言しないとバイナリがバグる
  * uint8_tかunsigned charの１バイトで宣言
@@ -290,16 +272,16 @@ mac_frame_header_t *Hello_p=(mac_frame_header_t*)&Hello;
 
 routing_table_t* r_table = NULL;
 backoff_t* b_st = NULL;
-/*
-mac_frame_header_t hello_packet;
-mac_frame_header_t* hello = (mac_frame_header_t*)&hello_packet;
-*/
 
 //file open
 FILE *fp;
 char* filename;
 
 uint8_t my_addr[6]={};
+
+//構造体のチェックサム用
+uint16_t prev_checksum;
+uint16_t current_checksum;
 /*ノードの固有値
  * LoRaの物理層から取得はできないため、有線LANのものを取得して使う
 */
@@ -738,22 +720,8 @@ void judge_tansfer_data(mac_frame_header_t* packet_p){
                 current = current->next;
             }
             insert_backoff(packet_p->SourceAddr,data_p->seqNum,OR_calculate_backoff(data_p,current->hop),1);
-            //delay(OR_calculate_backoff(data_p,current->hop));//待機
             //再送制御
-            
-            
-            
-            //insert_routing_table(packet_p->SourceAddr,,
-            /*
-            int num = get_routing_table(Hello_p);
-            int header_len = sizeof(mac_frame_header_t);
-            int payload_len = num * sizeof(mac_frame_data_t);
-            printf("%d %d\n",header_len,payload_len);
-            int total_len = header_len + payload_len;
-            Hello_p->len = total_len;
-            txlora((byte*)&packet, total_len);
-            txlora
-            */
+
         }
     }
     else if(packet_p->type == HELLO){
@@ -959,14 +927,15 @@ uint16_t checksum(byte* data,int len){
 }
 
 boolean calc_checksum(mac_frame_header_t* hdr,int len){
-    uint16_t prev_checksum = 0;
+    //uint16_t prev_checksum = 0;
+    prev_checksum = 0;
     prev_checksum = hdr->checksum;
     
     hdr->checksum = 0;
-    uint16_t current = checksum((byte*)hdr,len);
+    current_checksum = checksum((byte*)hdr,len);
     printf("origin:%u\n",prev_checksum);
-    printf("rx:%u\n",current);
-    return current == prev_checksum;
+    printf("rx:%u\n",current_checksum);
+    return current_checksum == prev_checksum;
         
 }
 
@@ -1023,15 +992,17 @@ void output_data_csv(int packet_RSSI,int RSSI,long int SNR,int length,int count,
     }
     //int count=0;
     //count++;
-    printf("debug\n");
-    printf("packet_RSSI: %d\n",packet_RSSI);
-    fprintf(fp,"%d,%d,%li,%i,%d,,%s,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%u,%u,%d,%02d,%02d,%02d,%02d,%02d,%09ld,%d,%02d,%02d,%02d,%02d,%02d,%09ld\n"
-    ,packet_RSSI,RSSI,SNR,length,count,judge_packet_type(hdr,packet_type)
+    //printf("debug\n");
+    //printf("packet_RSSI: %d\n",packet_RSSI);
+    fprintf(fp,"%d,%d,%li,%i,%d,,%u,%s,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%u,%d,%02d,%02d,%02d,%02d,%02d,%09ld,%d,%02d,%02d,%02d,%02d,%02d,%09ld,%u,%u\n"
+    ,packet_RSSI,RSSI,SNR,length,count
+    ,hdr->seqNum,judge_packet_type(hdr,packet_type)
     ,hdr->SourceAddr[0],hdr->SourceAddr[1],hdr->SourceAddr[2],hdr->SourceAddr[3],hdr->SourceAddr[4],hdr->SourceAddr[5]
     ,hdr->DestAddr[0],hdr->DestAddr[1],hdr->DestAddr[2],hdr->DestAddr[3],hdr->DestAddr[4],hdr->DestAddr[5]
-    ,hdr->len,hdr->seqNum
+    ,hdr->len
     ,tm_tx.tm_year+1900,tm_tx.tm_mon+1,tm_tx.tm_mday,tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec,hdr->time.tv_nsec
     ,tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec,ts.tv_nsec
+    ,prev_checksum,current_checksum
     );
     fclose(fp);
     
@@ -1058,10 +1029,14 @@ void receivepacket() {
             byte value = readReg(REG_PKT_SNR_VALUE);
             
             //checksum judge
-            if(!calc_checksum(p,(int)receivedbytes)){
+            /*if(!calc_checksum(p,(int)receivedbytes)){
                 printf("パケットを破棄します.\n");
                 
             }else{
+            */
+            if(!calc_checksum(p,(int)receivedbytes)){
+                printf("パケットを破棄します.\n");
+            }
             
             if( value & 0x80 ) // The SNR sign bit is 1
             {
@@ -1130,8 +1105,10 @@ void receivepacket() {
             }
             printf("\n");
             
+            
+            
         } // received a message
-    }
+    //}
     }  //dio0=1;
 }
 
@@ -1169,6 +1146,7 @@ static void writeBuf(byte addr, byte *value, byte len) {
     wiringPiSPIDataRW(CHANNEL, spibuf, len + 1);                                                        
     unselectreceiver();                                                                                 
 }
+
 
 void txlora(byte *frame, byte datalen) {
 
@@ -1217,15 +1195,20 @@ void file_open(char* file_name){//file_name = 〇〇.csv
         printf("can't open %s",file_name);
         exit(1);
     }
-    fprintf(fp,"PacketRSSI,RSSI,SNR,Length,tx_seq,,TYPE,srcAddress,srcAddress,srcAddress,srcAddress,srcAddress,srcAddress,destAddress,destAddress,destAddress,destAddress,destAddress,destAddress,length,sequence_num,年,月,日,時,分,秒,nsec,年,月,日,時,分,秒,nsec\n");
+    fprintf(fp,"PacketRSSI,RSSI,SNR,Length,tx_seq,,rx_seq,TYPE,srcAddress,srcAddress,srcAddress,srcAddress,srcAddress,srcAddress,destAddress,destAddress,destAddress,destAddress,destAddress,destAddress,length,年,月,日,時,分,秒,nsec,年,月,日,時,分,秒,nsec,tx checksum,rx checksum\n");
     fclose(fp);
 }
 
 
 int main (int argc, char *argv[]) {
     //FILE *fp;
-    filename = argv[1];
-    file_open(filename);
+    if(argv[1]){
+        filename = argv[1];
+        file_open(filename);
+    }else if(!argv[1]){
+        printf("保存ファイルを設定してください.\n");
+        exit(1);
+    }
     /*
     if (argc < 2) {
         printf ("Usage: argv[0] sender|rec [message]\n");

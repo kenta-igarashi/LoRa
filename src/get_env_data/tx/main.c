@@ -202,6 +202,10 @@ int count=0;
 clock_t sender , receiver;
 time_t current,later;
 
+//現在時刻の取得
+struct timespec ts;
+struct tm tm_tx;
+
 //パケットヘッダの構造体
 typedef struct{
     uint8_t type;//パケットかデータかの識別
@@ -256,25 +260,6 @@ typedef struct{
     backoff_entry_t* head;
     uint8_t size;
 }backoff_t;
-    
-      
-/*
-typedef struct{
-    uint8_t type;
-    uint8_t flag;
-    uint16_t duration;
-    uint8_t addr1[6];
-    uint8_t addr2[6];
-    uint8_t addr3[6];
-    uint8_t seqCtrl;
-    uint8_t addr4[6];
-    uint8_t payload[];
-}__attribute__((packed)) mac_lora_frame_header_t;
-*/
-
-
-//uint8_t data_frame[]={};
-//uint8_t ctrl_frame[]={};
 
 /*固定長の配列を宣言しないとバイナリがバグる
  * uint8_tかunsigned charの１バイトで宣言
@@ -287,11 +272,11 @@ mac_frame_header_t *Hello_p=(mac_frame_header_t*)&Hello;
 
 routing_table_t* r_table = NULL;
 backoff_t* b_st = NULL;
-/*
-mac_frame_header_t hello_packet;
-mac_frame_header_t* hello = (mac_frame_header_t*)&hello_packet;
-* */
+
 uint8_t my_addr[6]={};
+
+char* filename;
+FILE *fp;
 /*ノードの固有値
  * LoRaの物理層から取得はできないため、有線LANのものを取得して使う
 */
@@ -326,80 +311,10 @@ void mac_set_addr(uint8_t*original,uint8_t* target){
 void mac_set_bc_addr(uint8_t* target){
     for(int i = 0; i < 6; i++) target[i] = 0xff;    
 }
-/*
-void mac_tx_frame_header_init(){
-    //mac_lora_frame_header_t* data_hdr = (mac_lora_frame_header_t*)data_frame;
-    //mac_lora_frame_header_t* ctrl_hdr = (mac_lora_frame_header_t*)ctrl_frame;
-    
-    data_hdr->type = DATA;
-    ctrl_hdr->type = BEACON;
-    
-    mac_set_bc_addr(data_hdr->addr1);
-    mac_set_addr(my_addr,data_hdr->addr2);
-    mac_set_bc_addr(data_hdr->addr3);
-    mac_set_bc_addr(data_hdr->addr4);
-
-    mac_set_bc_addr(ctrl_hdr->addr1);
-    mac_set_addr(my_addr,ctrl_hdr->addr2);
-    mac_set_bc_addr(ctrl_hdr->addr3);
-    mac_set_bc_addr(ctrl_hdr->addr4);
-}
-*/
-/*
-void mac_tx_frame_payload_init(){
-    //mac_lora_frame_header_t* data_hdr = (mac_lora_frame_header_t*)data_frame;
-    //mac_lora_frame_header_t* ctrl_hdr = (mac_lora_frame_header_t*)ctrl_frame;
-    //mac_packet_header_t* data_org_hdr = (mac_packet_header_t*)data_hdr->payload;
-    //mac_packet_header_t* ctrl_org_hdr = (mac_packet_header_t*)ctrl_hdr->payload;
-    data_org_hdr->type = DATA;
-    data_org_hdr->len = USER_DATA_FRAME_LEN;
-    ctrl_org_hdr->type = BEACON;
-    ctrl_org_hdr->len = USER_CTRL_FRAME_LEN;
-    /*
-    int i = 0;
-    for(i = 0; i<1460;i++){
-        data_org_hdr->payload[i] = 0x77;
-        ctrl_org_hdr->payload[i] = 0x77;
-    }
-    * */
-//}
-/*
-void mac_tx_frame_header_init(){
-    mac_packet_header_t* data_hdr = (mac_packet_header_t*)data_frame;
-    mac_packet_header_t* ctrl_hdr = (mac_packet_header_t*)ctrl_frame;
-    
-    data_hdr->type = DATA;
-    mac_set_bc_addr(data_hdr->SourceAddr);
-    data_hdr->len = USER_DATA_FRAME_LEN;
-    ctrl_hdr->type = BEACON;
-    mac_set_bc_addr(ctrl_hdr->DestAddr);
-    ctrl_hdr->len = USER_CTRL_FRAME_LEN;
-    ctrl_hdr->seqNum = 0;
-    
-}
-*/
-/*
-void mac_tx_frame_header_init(mac_frame_header_t* hello_pack){
-    mac_frame_header_t* ctrl_hdr =hello_pack;
-
-    ctrl_hdr->type = BEACON;
-    mac_set_bc_addr(ctrl_hdr->SourceAddr);
-    mac_set_bc_addr(ctrl_hdr->DestAddr);
-    ctrl_hdr->len = USER_CTRL_FRAME_LEN;
-    ctrl_hdr->seqNum = 0;
-
-}
-*/
 
 /*mac frameとlora frameの初期化
  */
- 
-void frame_init(uint8_t* hello){//memset
-    for(int i =0;i<255;i++){
-    hello[i]=0;
-}
 
-} 
 void mac_tx_frame_header_init(mac_frame_header_t* hello_pack){
     mac_frame_header_t* ctrl_hdr =hello_pack;
 
@@ -803,20 +718,7 @@ void judge_tansfer_data(mac_frame_header_t* packet_p){
             insert_backoff(packet_p->SourceAddr,data_p->seqNum,OR_calculate_backoff(data_p,current->hop),1);
             //delay(OR_calculate_backoff(data_p,current->hop));//待機
             //再送制御
-            
-            
-            
-            //insert_routing_table(packet_p->SourceAddr,,
-            /*
-            int num = get_routing_table(Hello_p);
-            int header_len = sizeof(mac_frame_header_t);
-            int payload_len = num * sizeof(mac_frame_data_t);
-            printf("%d %d\n",header_len,payload_len);
-            int total_len = header_len + payload_len;
-            Hello_p->len = total_len;
-            txlora((byte*)&packet, total_len);
-            txlora
-            */
+
         }
     }
     else if(packet_p->type == HELLO){
@@ -1148,13 +1050,58 @@ static void writeBuf(byte addr, byte *value, byte len) {
     unselectreceiver();                                                                                 
 }
 
+void get_time_now(mac_frame_header_t* hdr){
+    //struct timespec ts;
+    //struct tm tm;
+    clock_gettime(CLOCK_REALTIME,&ts);
+    localtime_r(&ts.tv_sec,&tm_tx);
+    hdr->time = ts;
+    //printf("sizeof ts:%d",sizeof(ts));
+    //printf("sizeof ts:%10ld",hdr->time.tv_sec);
+    //printf("time %10ld.%09ld CLOCK_REALTIME\n",ts.tv_sec,ts.tv_nsec);
+    //printf("%d/%02d/%02d/ %02d:%02d:%02d.%09ld\n",tm.tm_year+1900,tm.tm_mon+1,tm.tm_mday,tm.tm_hour,tm.tm_min,tm.tm_sec,ts.tv_nsec);
+}
+
+char* judge_packet_type(mac_frame_header_t* hdr,char* packet_type){
+    if(hdr->type == HELLO){
+        strcpy(packet_type,"HELLO");
+        return  packet_type;
+    }
+    else if(hdr->type == DATA){
+        strcpy(packet_type,"DATA");
+        return  packet_type;
+    }
+    return 0;
+}
+
+void output_data_csv(mac_frame_header_t* hdr){
+    char packet_type[20];
+    //memset(
+    if((fp = fopen(filename,"a+")) == NULL){
+        printf("can't open file");
+        exit(1);
+    }
+    fprintf(fp,"%u,,%s,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x,%u,%d,%02d,%02d,%02d,%02d,%02d,%09ld,%u\n"
+    ,hdr->seqNum
+    ,judge_packet_type(hdr,packet_type)
+    ,hdr->SourceAddr[0],hdr->SourceAddr[1],hdr->SourceAddr[2],hdr->SourceAddr[3],hdr->SourceAddr[4],hdr->SourceAddr[5]
+    ,hdr->DestAddr[0],hdr->DestAddr[1],hdr->DestAddr[2],hdr->DestAddr[3],hdr->DestAddr[4],hdr->DestAddr[5]
+    ,hdr->len
+    ,tm_tx.tm_year+1900,tm_tx.tm_mon+1,tm_tx.tm_mday,tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec,ts.tv_nsec
+    ,hdr->checksum
+    );
+    fclose(fp);
+}
+
 void txlora(byte *frame, byte datalen) {
 
     //checksum function
     Hello_p->checksum = 0;
     Hello_p->checksum = checksum(frame,(int)datalen);
     printf("checksum: %u\n",Hello_p->checksum);
-
+    
+    get_time_now(Hello_p);
+    output_data_csv((mac_frame_header_t*)frame);
     // set the IRQ mapping DIO0=TxDone DIO1=NOP DIO2=NOP
     writeReg(RegDioMapping1, MAP_DIO0_LORA_TXDONE|MAP_DIO1_LORA_NOP|MAP_DIO2_LORA_NOP);
     // clear all radio IRQ flags
@@ -1198,18 +1145,14 @@ void txlora(byte *frame, byte datalen) {
   */  
 }
 
-void get_time_now(mac_frame_header_t* hdr){
-    struct timespec ts;
-    //struct tm tm;
-    clock_gettime(CLOCK_REALTIME,&ts);
-    //localtime_r(&ts.tv_sec,&tm);
-    hdr->time = ts;
-    //printf("sizeof ts:%d",sizeof(ts));
-    //printf("sizeof ts:%10ld",hdr->time.tv_sec);
-    //printf("time %10ld.%09ld CLOCK_REALTIME\n",ts.tv_sec,ts.tv_nsec);
-    //printf("%d/%02d/%02d/ %02d:%02d:%02d.%09ld\n",tm.tm_year+1900,tm.tm_mon+1,tm.tm_mday,tm.tm_hour,tm.tm_min,tm.tm_sec,ts.tv_nsec);
+void file_open(char* file_name){
+    if((fp = fopen(file_name,"w")) == NULL){
+        printf("can't open %s",file_name);
+        exit(1);
+    }
+    fprintf(fp,"tx_seq,,TYPE,srcAddress,srcAddress,srcAddress,srcAddress,srcAddress,srcAddress,destAddress,destAddress,destAddress,destAddress,destAddress,destAddress,length,年,月,日,時,分,秒,nsec,tx checksum\n");
+    fclose(fp);
 }
-
 
 int main (int argc, char *argv[]) {
     /*
@@ -1219,8 +1162,14 @@ int main (int argc, char *argv[]) {
     }
     */
     if(!argv[1]){
-        printf("送信回数を設定してください\n");
+        printf("送信回数を設定してください.\n");
         exit(1);
+    }else if(!argv[2]){
+        printf("保存ファイルを指定してください.\n");
+        exit(1);
+    }else{
+        filename = argv[2];
+        file_open(filename);
     }
 
     //hello.SourceAddr=0;
@@ -1419,7 +1368,6 @@ int main (int argc, char *argv[]) {
             }*/
             else {
                 Hello_p->len = header_len;
-                get_time_now(Hello_p);
                 txlora((byte*)&Hello, (byte)header_len);
             //txlora((byte*)&Hello,40);
             }

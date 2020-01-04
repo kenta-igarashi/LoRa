@@ -1,7 +1,0 @@
-PacketRSSI,RSSI,SNR,Length,tx_seq,,TYPE,srcAddress,srcAddress,srcAddress,srcAddress,srcAddress,srcAddress,destAddress,destAddress,destAddress,destAddress,destAddress,destAddress,length,sequence_num,年,月,日,時,分,秒,nsec,年,月,日,時,分,秒,nsec
--42,-96,9,30,1,,HELLO,b8,27,eb,86,45,d3,ff,ff,ff,ff,ff,ff,30,22,2019,12,26,22,00,09,000063558,2019,12,26,22,00,09,062465517
--42,-96,9,30,2,,HELLO,b8,27,eb,86,45,d3,ff,ff,ff,ff,ff,ff,30,23,2019,12,26,22,00,11,000056569,2019,12,26,22,00,11,062416681
--43,-96,9,30,3,,HELLO,b8,27,eb,86,45,d3,ff,ff,ff,ff,ff,ff,30,24,2019,12,26,22,00,13,000061820,2019,12,26,22,00,13,062426802
--43,-96,9,30,4,,HELLO,b8,27,eb,86,45,d3,ff,ff,ff,ff,ff,ff,30,25,2019,12,26,22,00,15,000060615,2019,12,26,22,00,15,062431089
--41,-96,9,30,5,,HELLO,b8,27,eb,86,45,d3,ff,ff,ff,ff,ff,ff,30,26,2019,12,26,22,00,17,000053734,2019,12,26,22,00,17,062438290
--42,-94,9,30,6,,HELLO,b8,27,eb,86,45,d3,ff,ff,ff,ff,ff,ff,30,27,2019,12,26,22,00,19,000063365,2019,12,26,22,00,19,062445021
