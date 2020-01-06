@@ -249,6 +249,7 @@ typedef struct backoff_entry_struct{
     uint8_t srcAddr[6];
     uint16_t seqNum;
     double backoff;
+    time_t backoff_now;
     backoff_entry_struct* next;
 }backoff_entry_t;
 
@@ -270,41 +271,30 @@ typedef struct{
     uint8_t size;
 }packet_table_t;
 
-/*
-typedef struct{
-    uint8_t type;
-    uint8_t flag;
-    uint16_t duration;
-    uint8_t addr1[6];
-    uint8_t addr2[6];
-    uint8_t addr3[6];
-    uint8_t seqCtrl;
-    uint8_t addr4[6];
-    uint8_t payload[];
-}__attribute__((packed)) mac_lora_frame_header_t;
-*/
-
-
-//uint8_t data_frame[]={};
-//uint8_t ctrl_frame[]={};
-
 /*固定長の配列を宣言しないとバイナリがバグる
  * uint8_tかunsigned charの１バイトで宣言
  * 255はLoRaの最大ペイロードサイズ
  */
 uint8_t Hello[255] = {};
 uint8_t data[255] = {};
+uint8_t Ack[255] = {};
+
 mac_frame_header_t* data_packet = (mac_frame_header_t*)&data;
 mac_frame_header_t *Hello_p=(mac_frame_header_t*)&Hello;
+mac_frame_header_t* Ack_p = (mac_frame_header_t*)&Ack;
+
 
 routing_table_t* r_table = NULL;
 backoff_t* bo_st = NULL;
 packet_table_t* p_table = NULL;
-/*
-mac_frame_header_t hello_packet;
-mac_frame_header_t* hello = (mac_frame_header_t*)&hello_packet;
-* */
+
 uint8_t my_addr[6]={};
+
+//現在時刻の取得
+struct timespec ts;
+struct tm tm_rx;
+time_t after_backoff;
+
 /*ノードの固有値
  * LoRaの物理層から取得はできないため、有線LANのものを取得して使う
 */
@@ -349,7 +339,16 @@ void mac_tx_frame_header_init(mac_frame_header_t* hdr){
     hdr->type = HELLO;
     mac_set_bc_addr(hdr->SourceAddr);
     mac_set_bc_addr(hdr->DestAddr);
-    hdr->len = USER_CTRL_FRAME_LEN;// hdr + payload
+    hdr->len = 0;// hdr + payload
+    hdr->seqNum = 0;
+    hdr->checksum = 0;
+}
+
+void mac_tx_ack_frame_header_init(mac_frame_header_t* hdr){
+    hdr->type = ACK;
+    mac_set_bc_addr(hdr->SourceAddr);
+    mac_set_bc_addr(hdr->DestAddr);
+    hdr->len = 0;// hdr + payload
     hdr->seqNum = 0;
     hdr->checksum = 0;
 }
@@ -663,6 +662,7 @@ void print_backoff_table(){
         mac_print_addr(current->srcAddr);
         printf("sequence number: %u\n",current->seqNum);
         printf("backoff time   : %lf\n",current->backoff);
+        printf("table size     : %d\n",bo_st->size);
         i++;
         current = current->next;
     }
@@ -722,7 +722,7 @@ packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_fram
     return NULL;
 }
 
-void insert_backoff(uint8_t* srcAddr,uint16_t seq,double backoff){//,uint8_t flag){
+void insert_backoff(uint8_t* srcAddr,uint16_t seq,double backoff,time_t backoff_now){//,uint8_t flag){
     backoff_entry_t* current = bo_st->head;
     backoff_entry_t* previous = NULL;
     while(current && is_smaller_backoff(current->backoff,backoff)){
@@ -738,6 +738,7 @@ void insert_backoff(uint8_t* srcAddr,uint16_t seq,double backoff){//,uint8_t fla
         new_entry->backoff = backoff;
         mac_set_addr(srcAddr, new_entry->srcAddr);
         new_entry->seqNum = seq;
+        new_entry->backoff_now = backoff_now;
         new_entry->next = NULL;
         (bo_st)->size++;
         
@@ -753,10 +754,19 @@ void insert_backoff(uint8_t* srcAddr,uint16_t seq,double backoff){//,uint8_t fla
     return ;
 } 
 
-void dequeue(){
-
+void dequeue_backoff_table(){
+    printf("backoff tableを削除します.\n");
+    backoff_entry_t* toFree = NULL;
     
+    if(bo_st->head){
+       toFree = bo_st->head;
+       bo_st->head = bo_st->head->next;
+       free(toFree);
+       --bo_st->size;
+       print_backoff_table();
+    }
 }
+
 
 void die(const char *s)
 {
@@ -905,6 +915,58 @@ void SetupLoRa()
 
 }
 
+static void configPower (int8_t pw) {
+    if (sx1272 == false) {
+        // no boost used for now
+        if(pw >= 17) {
+            pw = 15;
+        } else if(pw < 2) {
+            pw = 2;
+        }
+        // check board type for BOOST pin
+        writeReg(RegPaConfig, (uint8_t)(0x80|(pw&0xf)));
+        writeReg(RegPaDac, readReg(RegPaDac)|0x4);
+
+    } else {
+        // set PA config (2-17 dBm using PA_BOOST)
+        if(pw > 17) {
+            pw = 17;
+        } else if(pw < 2) {
+            pw = 2;
+        }
+        writeReg(RegPaConfig, (uint8_t)(0x80|(pw-2)));
+    }
+}
+
+void set_txmode(){
+    //送信モード
+    opmodeLora();
+    // enter standby mode (required for FIFO loading))
+    opmode(OPMODE_STANDBY);
+    writeReg(RegPaRamp, (readReg(RegPaRamp) & 0xF0) | 0x08); // set PA ramp-up time 50 uSec
+    configPower(23);
+}
+
+void set_rxmode(){
+    //LoRaを受信モードにセット
+    //receiverの設定
+    SetupLoRa();
+    opmodeLora();
+    opmode(OPMODE_STANDBY);
+    opmode(OPMODE_RX);
+}
+
+static void writeBuf(byte addr, byte *value, byte len) {                                                       
+    unsigned char spibuf[256];                                                                          
+    spibuf[0] = addr | 0x80;                                                                            
+    for (int i = 0; i < len; i++) {                                                                         
+        spibuf[i + 1] = value[i];                                                                       
+    }                                                                                                   
+    selectreceiver();                                                                                   
+    wiringPiSPIDataRW(CHANNEL, spibuf, len + 1);                                                        
+    unselectreceiver();                                                                                 
+}
+
 uint16_t checksum(byte *data,int len){
     register uint32_t sum;
     register uint16_t *ptr;
@@ -945,6 +1007,60 @@ boolean calc_checksum(mac_frame_header_t* hdr,int len){
     return current == prev_checksum;
 }
 
+
+void txlora(byte *frame, byte datalen) {
+
+    //checksum function
+    ((mac_frame_header_t*)frame)->checksum = 0;//送信するたびに0に初期化しないと値が一致しない
+    ((mac_frame_header_t*)frame)->checksum = checksum(frame,(int)datalen);
+    printf("checksum: %u\n",((mac_frame_header_t*)frame)->checksum);
+
+    // set the IRQ mapping DIO0=TxDone DIO1=NOP DIO2=NOP
+    writeReg(RegDioMapping1, MAP_DIO0_LORA_TXDONE|MAP_DIO1_LORA_NOP|MAP_DIO2_LORA_NOP);
+    // clear all radio IRQ flags
+    writeReg(REG_IRQ_FLAGS, 0xFF);
+    // mask all IRQs but TxDone
+    writeReg(REG_IRQ_FLAGS_MASK, ~IRQ_LORA_TXDONE_MASK);
+
+    // initialize the payload size and address pointers
+    writeReg(REG_FIFO_TX_BASE_AD, 0x00);
+    writeReg(REG_FIFO_ADDR_PTR, 0x00);
+    writeReg(REG_PAYLOAD_LENGTH, datalen);
+
+    //download buffer to the radio FIFO
+    writeBuf(REG_FIFO, frame, datalen);
+    // now we actually start the transmission
+    opmode(OPMODE_TX);
+    
+    printf("\n");
+    //printf("seq: %d",seqNum);
+    printf("send: %s\n", frame);
+    
+    //確認
+    mac_frame_header_t* p_frame = (mac_frame_header_t*)frame;
+    if(p_frame->type == HELLO){
+        //print_mac_frame_header(Hello_p);
+        //print_mac_frame_payload(Hello_p);
+        print_mac_frame_header(p_frame);
+        //print_mac_frame_payload(p_frame);
+        printf("------------------\n");
+    }else if(p_frame->type == DATA){
+        print_mac_frame_header(p_frame);
+        print_data_frame(p_frame);
+        printf("------------------\n");
+    }
+    
+    //printf("length: %d\n",sizeof(Hello));
+    
+
+    for(int i = 0;i<datalen;i++){
+        printf("%02x ",frame[i]);
+    }
+    printf("\n");
+    
+}
+
+
 double sigmoid(double gain, double x){
     return (1.0 / (1.0 + exp(-gain * x)));
 }
@@ -975,6 +1091,7 @@ double OR_calculate_backoff(uint8_t desthop,uint8_t hop){
     }else{
         backoff += rand() % (10 * 1000);
     }
+    printf("backoff           :%lf\n",backoff);
     return backoff;
 }
 
@@ -982,7 +1099,15 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
     //mac_frame_header_t* packet_p = (mac_frame_header_t*)&packet;
     or_data_packet_t* data_p = (or_data_packet_t*)packet_p->payload;
     routing_table_entry_t* current = r_table->head;
-    if(packet_p->type == DATA){
+    if(packet_p->type == ACK){
+        packet_table_entry_t* p_entry = insert_packet_table(packet_p->SourceAddr,packet_p->seqNum,packet_p);
+                //if(p_entry){//受信済み
+        //if(current->hop >= data_p->destHop){
+        p_entry->flag = ACK;
+        //}
+    //}
+    }
+    else if(packet_p->type == DATA){
             print_mac_frame_header(packet_p);
             print_data_frame(packet_p);
             
@@ -992,6 +1117,18 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
                 message[i] =data_p->message[i];
             }
             printf("payload message : %s\n",message);
+            
+            Ack_p->seqNum = packet_p->seqNum;
+            mac_set_addr(packet_p->DestAddr,Ack_p->DestAddr);
+            mac_set_addr(packet_p->SourceAddr,Ack_p->SourceAddr);
+            
+            //送信モード
+            set_txmode();
+            txlora((byte*)Ack,(byte)Ack_p->len);
+            
+            //受信モードに切り替え
+            set_rxmode();
+            
         }else{//自分ではない場合
             printf("transfer data\n");
             
@@ -1005,12 +1142,14 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
                     if(current->hop >= data_p->destHop){
                         p_entry->flag = ACK;
                     }
+                    
                 }
                 else{//未受信
                     //転送待機時間の算出
                     
                         double bo = OR_calculate_backoff(data_p->destHop,current->hop);
-                        insert_backoff(packet_p->SourceAddr,packet_p->seqNum,bo);
+                        time(&after_backoff);
+                        insert_backoff(packet_p->SourceAddr,packet_p->seqNum,bo,after_backoff);
                 
                     
                 }
@@ -1030,7 +1169,14 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
     }
 }
 
-
+void get_time_now(){
+    //struct timespec ts;
+    //struct tm tm_tx,tm_rx;
+    clock_gettime(CLOCK_REALTIME,&ts);
+    localtime_r(&ts.tv_sec,&tm_rx);
+    printf("rxtime:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec,ts.tv_nsec);
+    //printf("difftime:")
+}
 
 boolean receive(char *payload) {
     // clear rxDone
@@ -1072,6 +1218,8 @@ void receivepacket() {
     {
         if(receive(message)) {
             mac_frame_header_t* p = (mac_frame_header_t*)message;
+            //get_time_now();
+            time(&after_backoff);
             //checksum function
             if(!calc_checksum(p,(int)receivedbytes)){
                 printf("パケットを破棄します.\n");
@@ -1142,94 +1290,6 @@ void receivepacket() {
     }  //dio0=1;
 }
 
-static void configPower (int8_t pw) {
-    if (sx1272 == false) {
-        // no boost used for now
-        if(pw >= 17) {
-            pw = 15;
-        } else if(pw < 2) {
-            pw = 2;
-        }
-        // check board type for BOOST pin
-        writeReg(RegPaConfig, (uint8_t)(0x80|(pw&0xf)));
-        writeReg(RegPaDac, readReg(RegPaDac)|0x4);
-
-    } else {
-        // set PA config (2-17 dBm using PA_BOOST)
-        if(pw > 17) {
-            pw = 17;
-        } else if(pw < 2) {
-            pw = 2;
-        }
-        writeReg(RegPaConfig, (uint8_t)(0x80|(pw-2)));
-    }
-}
-
-
-static void writeBuf(byte addr, byte *value, byte len) {                                                       
-    unsigned char spibuf[256];                                                                          
-    spibuf[0] = addr | 0x80;                                                                            
-    for (int i = 0; i < len; i++) {                                                                         
-        spibuf[i + 1] = value[i];                                                                       
-    }                                                                                                   
-    selectreceiver();                                                                                   
-    wiringPiSPIDataRW(CHANNEL, spibuf, len + 1);                                                        
-    unselectreceiver();                                                                                 
-}
-
-
-void txlora(byte *frame, byte datalen) {
-
-    //checksum function
-    Hello_p->checksum = 0;//送信するたびに0に初期化しないと値が一致しない
-    Hello_p->checksum = checksum(frame,(int)datalen);
-    printf("checksum: %u\n",Hello_p->checksum);
-
-    // set the IRQ mapping DIO0=TxDone DIO1=NOP DIO2=NOP
-    writeReg(RegDioMapping1, MAP_DIO0_LORA_TXDONE|MAP_DIO1_LORA_NOP|MAP_DIO2_LORA_NOP);
-    // clear all radio IRQ flags
-    writeReg(REG_IRQ_FLAGS, 0xFF);
-    // mask all IRQs but TxDone
-    writeReg(REG_IRQ_FLAGS_MASK, ~IRQ_LORA_TXDONE_MASK);
-
-    // initialize the payload size and address pointers
-    writeReg(REG_FIFO_TX_BASE_AD, 0x00);
-    writeReg(REG_FIFO_ADDR_PTR, 0x00);
-    writeReg(REG_PAYLOAD_LENGTH, datalen);
-
-    //download buffer to the radio FIFO
-    writeBuf(REG_FIFO, frame, datalen);
-    // now we actually start the transmission
-    opmode(OPMODE_TX);
-    
-    printf("\n");
-    //printf("seq: %d",seqNum);
-    printf("send: %s\n", frame);
-    
-    //確認
-    mac_frame_header_t* p_frame = (mac_frame_header_t*)frame;
-    if(p_frame->type == HELLO){
-        //print_mac_frame_header(Hello_p);
-        //print_mac_frame_payload(Hello_p);
-        print_mac_frame_header(p_frame);
-        //print_mac_frame_payload(p_frame);
-        printf("------------------\n");
-    }else if(p_frame->type == DATA){
-        print_mac_frame_header(p_frame);
-        print_data_frame(p_frame);
-        printf("------------------\n");
-    }
-    
-    //printf("length: %d\n",sizeof(Hello));
-    
-
-    for(int i = 0;i<datalen;i++){
-        printf("%02x ",frame[i]);
-    }
-    printf("\n");
-    
-}
-
 
 void print_payload_data(){
     printf("message: %s\n",message);
@@ -1270,15 +1330,19 @@ packet_table_entry_t* check_packet_table(uint8_t *srcAddr,uint16_t seq){//,uint8
     return NULL;
 }
 
-double return_backoff_time(double backoff){
+double return_backoff_time(double backoff,time_t backoff_now){
     //printf("backoff time = %lf\n",backoff);
-    double backoff_now;
+    double return_backoff;
+    
     //printf("backoff: %lf\n",backoff);
-    backoff_now = now + backoff * pow(10.0,-3.0);
+    return_backoff = backoff_now + backoff * pow(10.0,-3.0);
     //printf("now time: %ld\n",now);
     //printf("backoff time: %lf\n",backoff_now);
-    return backoff_now;
+    return return_backoff;
 }
+
+
+
 
 int main (int argc, char *argv[]) {
     /*
@@ -1317,6 +1381,7 @@ int main (int argc, char *argv[]) {
     //init tx frame function
     memset(&Hello[0],0,sizeof(Hello));
     memset(&data[0],0,sizeof(data));
+    memset(&Ack[0],0,sizeof(Ack));
     mac_tx_frame_header_init(Hello_p);
     //mac_tx_frame_payload_init();
     mac_tx_frame_payload_init(Hello_p);
@@ -1331,6 +1396,12 @@ int main (int argc, char *argv[]) {
     Hello_p->type = HELLO;
     mac_set_addr(my_addr,Hello_p->SourceAddr);
     Hello_p->seqNum = 0;
+    
+    Ack_p->type = ACK;
+    mac_set_addr(my_addr,Ack_p->SourceAddr);
+    Ack_p->seqNum = 0;
+    Ack_p->len = sizeof(mac_frame_header_t);
+    
     //mac_print_addr(hello->SourceAddr);
     
     //時刻を一秒追加
@@ -1359,30 +1430,32 @@ int main (int argc, char *argv[]) {
            
             
             //if(bo_st->head && (now <= bo_st->head->backoff)){
-            if(bo_st->head && (now > return_backoff_time(bo_st->head->backoff))){
-                //printf("debugだよ\n");
-                //return_backoff_time(bo_st->head->backoff);
-                packet_table_entry_t* p_entry = check_packet_table(bo_st->head->srcAddr,bo_st->head->seqNum);
-                if(p_entry->flag != ACK){
-                    routing_table_entry_t* r_entry = r_table->head;
-                    
+            //if(bo_st->head && (now > return_backoff_time(bo_st->head->backoff))){
+            if(bo_st->head ){
+                if(now > return_backoff_time(bo_st->head->backoff,bo_st->head->backoff_now)){
+                    //printf("debugだよ\n");
+                    //return_backoff_time(bo_st->head->backoff);
+                    packet_table_entry_t* p_entry = check_packet_table(bo_st->head->srcAddr,bo_st->head->seqNum);
+                    if(p_entry->flag != ACK){
+                        routing_table_entry_t* r_entry = r_table->head;
                         while(r_entry && !is_same_addr(r_entry->addr,p_entry->packet->DestAddr)){//宛先端末のホップ数を調べる
                             r_entry = r_entry->next;
                         }
-                    
-                    //再送する場合は要修正
-                    ((or_data_packet_t*)p_entry->packet->payload)->srcHop ++;
-                    ((or_data_packet_t*)p_entry->packet->payload)->destHop = r_entry->hop;
-                    //printf("データを転送します.\n");
-                    //if(now > return_backoff_time(bo_st->head->backoff)){
+                        //再送する場合は要修正
+                        ((or_data_packet_t*)p_entry->packet->payload)->srcHop ++;
+                        ((or_data_packet_t*)p_entry->packet->payload)->destHop = r_entry->hop;
                         printf("データを転送します.\n");
+                        //送信モード
+                        set_txmode();
+                        
                         txlora((byte*)p_entry->packet,(byte)p_entry->packet->len);
-                    //}
+                        
+                        //受信モードに切り替え
+                        set_rxmode();
+                    }
+                    dequeue_backoff_table();
                 }
             }
-            
-            
-            
         }else {
             //printf("%d\n",count);
             count=0;

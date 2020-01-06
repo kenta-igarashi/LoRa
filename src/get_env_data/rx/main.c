@@ -326,7 +326,7 @@ void mac_tx_frame_header_init(mac_frame_header_t*hdr){
     hdr->type = HELLO;
     mac_set_bc_addr(hdr->SourceAddr);
     mac_set_bc_addr(hdr->DestAddr);
-    hdr->len = USER_CTRL_FRAME_LEN;// hdr + payload
+    hdr->len = 0;// hdr + payload
     hdr->seqNum = 0;
     memset(&hdr->time,0,sizeof(struct timespec));
 
