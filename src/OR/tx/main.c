@@ -634,7 +634,7 @@ void add_routing_table(mac_frame_header_t* hdr){
     */
     
     for(int i = 0; i<len;i++){
-        insert_routing_table((entry+i)->DestAddr,(entry+i)->Hop,(entry+i)->seqNum);
+        insert_routing_table((entry+i)->DestAddr,(entry+i)->Hop+1,(entry+i)->seqNum);
     }
     
     /*
