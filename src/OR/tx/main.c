@@ -1091,6 +1091,8 @@ void txlora(byte *frame, byte datalen) {
     }
     printf("\n");
     
+    usleep(250000);
+    
 }
 
 
@@ -1566,9 +1568,10 @@ int main (int argc, char *argv[]) {
                 return 0;
             }else{
                 Hello_p->len = total_len;
+                /*
                 for(int i = 53;i<255;i++){
                     Hello[i] =0x11;
-                } 
+                } */
                 txlora((byte*)&Hello, total_len);
             }
             
