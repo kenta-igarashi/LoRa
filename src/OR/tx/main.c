@@ -612,7 +612,7 @@ void print_data_frame(mac_frame_header_t* packet){
 
 //void add_routing_table(routing_table_t* routing_t){
 void add_routing_table(mac_frame_header_t* hdr){
-    int len = (hdr->len - sizeof(mac_frame_header_t) )/sizeof(mac_frame_payload_t*);
+    int len = ((hdr->len) - sizeof(mac_frame_header_t) )/sizeof(mac_frame_payload_t);
     printf("insert routing table length: %d\n",len);
     //routing_table_entry_t* entry = (routing_table_entry_t*)hdr->payload;
     mac_frame_payload_t* entry = (mac_frame_payload_t*)hdr->payload;
