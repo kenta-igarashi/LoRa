@@ -426,6 +426,33 @@ boolean is_same_addr(uint8_t* origin,uint8_t* target){
     }
     return true;
 }
+
+void delete_routing_table(uint8_t* addr){
+    routing_table_entry_t* toFree = NULL;
+    routing_table_entry_t* current = r_table->head;
+    
+    if(!current){
+        //no entry in routing table 
+    }
+    else if(is_same_addr(current->addr,addr)){
+        toFree = r_table->head;
+        current->next = toFree->next;
+        free(toFree);
+        --r_table->size;
+    }
+    else {
+        while(current->next && is_smaller_addr(current->addr,addr)){
+            current = current->next;
+        }
+    }
+    if(current->next && is_same_addr(current->next->addr,addr)){
+        toFree = current->next;
+        current->next = toFree->next;
+        free(toFree);
+        --r_table->size;
+    }
+}
+
 void insert_routing_table(uint8_t* addr,uint8_t hop,uint8_t seq){
 
     routing_table_entry_t* current = r_table->head;
@@ -468,6 +495,7 @@ void insert_routing_table(uint8_t* addr,uint8_t hop,uint8_t seq){
         //}
     }else if(current && is_same_addr(current->addr,my_addr)){
         printf("自身なのでルーティングテーブルに格納しません.\n");
+        delete_routing_table(my_addr);
         return;
         
     }
@@ -527,32 +555,6 @@ void insert_routing_table(uint8_t* addr,uint8_t hop,uint8_t seq){
     }
     return ;
 } 
-
-void delete_routing_table(uint8_t* addr){
-    routing_table_entry_t* toFree = NULL;
-    routing_table_entry_t* current = r_table->head;
-    
-    if(!current){
-        //no entry in routing table 
-    }
-    else if(is_same_addr(current->addr,addr)){
-        toFree = r_table->head;
-        current->next = toFree->next;
-        free(toFree);
-        --r_table->size;
-    }
-    else {
-        while(current->next && is_smaller_addr(current->addr,addr)){
-            current = current->next;
-        }
-    }
-    if(current->next && is_same_addr(current->next->addr,addr)){
-        toFree = current->next;
-        current->next = toFree->next;
-        free(toFree);
-        --r_table->size;
-    }
-}
 
 int get_routing_table(mac_frame_header_t* hello){
     mac_frame_payload_t* current = (mac_frame_payload_t*) hello->payload;
@@ -1254,6 +1256,7 @@ void receivepacket() {
             time(&after_backoff);
             //checksum function
             if(!calc_checksum(p,(int)receivedbytes)){
+                printf("Length: %i", (int)receivedbytes);
                 printf("パケットを破棄します.\n");
                 
             }else{
