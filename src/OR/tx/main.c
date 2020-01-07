@@ -236,7 +236,7 @@ typedef struct{
 
 typedef struct routing_table_entry_struct{
     uint8_t hop;
-    uint8_t seq;
+    uint16_t seq;
     uint8_t addr[6];
     //lifetime
     routing_table_entry_struct* next;
