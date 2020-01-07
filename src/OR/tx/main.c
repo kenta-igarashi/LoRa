@@ -493,12 +493,12 @@ void insert_routing_table(uint8_t* addr,uint8_t hop,uint8_t seq){
 //            current->next = new_entry;
  //       }            
         //}
-    }else if(current && is_same_addr(current->addr,my_addr)){
+    }/*else if(current && is_same_addr(current->addr,my_addr)){
         printf("自身なのでルーティングテーブルに格納しません.\n");
-        delete_routing_table(my_addr);
+        //delete_routing_table(my_addr);
         return;
         
-    }
+    }*/
     // else if(current->addr == addr){
     else if(current && is_same_addr(current->addr,addr)){
         //update
@@ -1255,6 +1255,12 @@ void receivepacket() {
             //get_time_now();
             time(&after_backoff);
             //checksum function
+            
+                for(int i = 0;i < (int)receivedbytes;i++){
+                    printf("%02x ",message[i]);
+                }
+                printf("\n");
+            
             if(!calc_checksum(p,(int)receivedbytes)){
                 printf("Length: %i", (int)receivedbytes);
                 printf("パケットを破棄します.\n");
