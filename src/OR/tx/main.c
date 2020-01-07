@@ -156,6 +156,7 @@
 
 #define USER_DATA_FRAME_LEN 1500
 #define USER_CTRL_FRAME_LEN 100
+#define MAX_PAYLOAD_LEN 255
 
 // #############################################
 // #############################################
@@ -565,6 +566,10 @@ int get_routing_table(mac_frame_header_t* hello){
         i++;
         current_entry = current_entry->next;
     }
+    for(int j = 0;j<i;j++){
+        printf("%02x",current[j]);
+    }
+    printf("\n");
    return i;
 }
 
@@ -600,18 +605,39 @@ void print_data_frame(mac_frame_header_t* packet){
     //printf("suequence number: %u\n",data_frame->seqNum);
 }
 
-void add_routing_table(routing_table_t* routing_t){
-    routing_table_entry_t* current =routing_t->head;
-    printf("routing table is:\n");
+//void add_routing_table(routing_table_t* routing_t){
+void add_routing_table(mac_frame_header_t* hdr){
+    int len = (hdr->len - sizeof(mac_frame_header_t) )/sizeof(routing_table_entry_t);
+    printf("%d\n",len);
+    //routing_table_entry_t* entry = (routing_table_entry_t*)hdr->payload;
+    mac_frame_payload_t* entry = (mac_frame_payload_t*)hdr->payload;
+    
+    //routing_table_entry_t* current =routing_t->head;
+    //printf("routing table is:\n");
     //routing_table_entry_t* current = r_table->head;
+    /*
     if(!current){ //current==NULL
         printf("data nothing\n");
         return ;
     }
+    * */
+    if(len == 0) return;
+    int i = 0;
+    while(i == len){
+        insert_routing_table(entry->DestAddr,entry->Hop+1,entry->seqNum);
+        entry = entry++;
+        i++;
+    }
+    /*
+    for(int i = 0; i<len;i++){
+        insert_routing_table(entry->DestAddr,entry[i]->Hop,entry[i]->seqNum);
+    }
+    * */
+    /*
     while(current){//current!=NULL
         insert_routing_table(current->addr,current->hop+1,current->seq);
         current = current->next;
-    }
+    }*/
     
 }
 
@@ -1159,9 +1185,10 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
     else if(packet_p->type == HELLO){
         print_mac_frame_header(packet_p);
         //print_mac_frame_payload(packet_p);
+    
         
         insert_routing_table(packet_p->SourceAddr, 1, packet_p->seqNum);
-        add_routing_table(r_table);
+        add_routing_table(packet_p);
         print_routing_table(r_table);
     }
     else{
@@ -1370,10 +1397,7 @@ int main (int argc, char *argv[]) {
     
     //LoRaを受信モードにセット
     //receiverの設定
-    SetupLoRa();
-    opmodeLora();
-    opmode(OPMODE_STANDBY);
-    opmode(OPMODE_RX);
+    set_rxmode();
 
     //printf("%d\n",sizeof(mac_frame_header_t));
     //printf("value is=%02x\n",readReg(0x31));
@@ -1406,7 +1430,7 @@ int main (int argc, char *argv[]) {
     
     //時刻を一秒追加
     time(&later);
-    later+=2;
+    later+=5;
     //while
     while(1){
         time(&now);
@@ -1462,13 +1486,8 @@ int main (int argc, char *argv[]) {
             //時間測定
             sender=clock();
             //送信モードにセット
-            opmodeLora();
-            // enter standby mode (required for FIFO loading))
-            opmode(OPMODE_STANDBY);
-
-            writeReg(RegPaRamp, (readReg(RegPaRamp) & 0xF0) | 0x08); // set PA ramp-up time 50 uSec
-
-            configPower(23);
+            set_txmode();
+            
             //printf("value is=%02x\n",readReg(0x31));
             //printf("\n");
             
@@ -1548,7 +1567,7 @@ int main (int argc, char *argv[]) {
             
             //時間の更新
             time(&later);
-            later+=3;
+            later+=5;
             //delay(5000);
         
         }
