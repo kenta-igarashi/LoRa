@@ -466,7 +466,7 @@ void insert_routing_table(uint8_t* addr,uint8_t hop,uint8_t seq){
 //            current->next = new_entry;
  //       }            
         //}
-    }else if(is_same_addr(current->addr,my_addr)){
+    }else if(current && is_same_addr(current->addr,my_addr)){
         printf("自身なのでルーティングテーブルに格納しません.\n");
         return;
         
