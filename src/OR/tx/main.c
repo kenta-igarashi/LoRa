@@ -621,7 +621,7 @@ void print_routing_table(routing_table_t* routing_t){
         printf("table size: %d\n",routing_t->size);
         i++;
         output_data_csv(current);
-        
+        output_data_csv_space();
         current = current->next;
     }
     
