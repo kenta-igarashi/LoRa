@@ -626,14 +626,17 @@ void add_routing_table(mac_frame_header_t* hdr){
         return ;
     }
     * */
-    if(len == 0) return;
-    
-    int i = 0;
-    while(i < len){
-        insert_routing_table(entry->DestAddr,entry->Hop+1,entry->seqNum);
-        ++entry;
-        i++;
-        mac_print_addr(entry->DestAddr);
+    if(len == 0){ 
+        return;
+    }else{
+    //int i = 0;
+        //while(i < len){
+        for(int i = 0;i < len;i++){
+            insert_routing_table(entry->DestAddr,entry->Hop+1,entry->seqNum);
+            ++entry;
+            i++;
+            mac_print_addr(entry->DestAddr);
+        }
     }
     /*
     while(current){//current!=NULL
