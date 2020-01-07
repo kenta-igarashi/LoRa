@@ -628,11 +628,12 @@ void add_routing_table(mac_frame_header_t* hdr){
     * */
     if(len == 0) return;
     
-    int i = 1;
+    int i = 0;
     while(i < len){
         insert_routing_table(entry->DestAddr,entry->Hop+1,entry->seqNum);
         ++entry;
         i++;
+        mac_print_addr(entry->DestAddr);
     }
     /*
     while(current){//current!=NULL
