@@ -203,7 +203,8 @@ int count=0;
 //時間計測の構造体
 clock_t sender , receiver;
 time_t now,later;
-
+//乱数取得用
+struct timeval tv_rand;
 
 //パケットヘッダの構造体
 typedef struct{
@@ -430,10 +431,6 @@ void insert_routing_table(uint8_t* addr,uint8_t hop,uint8_t seq){
     routing_table_entry_t* current = r_table->head;
     routing_table_entry_t* previous = NULL;
     
-    //if(!r_table->head){
-      //insert  
-    //  return ;
-    //}
     printf("tes\n");
     
     // current
@@ -469,6 +466,10 @@ void insert_routing_table(uint8_t* addr,uint8_t hop,uint8_t seq){
 //            current->next = new_entry;
  //       }            
         //}
+    }else if(is_same_addr(current->addr,my_addr)){
+        printf("自身なのでルーティングテーブルに格納しません.\n");
+        return;
+        
     }
     // else if(current->addr == addr){
     else if(current && is_same_addr(current->addr,addr)){
@@ -1571,7 +1572,10 @@ int main (int argc, char *argv[]) {
             
             //時間の更新
             time(&later);
-            later+=5;
+            gettimeofday(&tv_rand,NULL);
+            srand(tv_rand.tv_sec * (tv_rand.tv_usec + 1));
+
+            later= later + 4.9 + (rand() % 200) * pow(10.0,-3.0) ;
             //delay(5000);
         
         }
