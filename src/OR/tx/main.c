@@ -290,6 +290,10 @@ routing_table_t* r_table = NULL;
 backoff_t* bo_st = NULL;
 packet_table_t* p_table = NULL;
 
+//file open
+FILE *fp;
+char* filename;
+
 uint8_t my_addr[6]={};
 
 //現在時刻の取得
@@ -578,6 +582,28 @@ int get_routing_table(mac_frame_header_t* hello){
    return i;
 }
 
+void output_data_csv(routing_table_entry_t* head){
+    if((fp = fopen(filename,"a+")) == NULL){
+        printf("can't open file");
+        exit(1);
+    }
+    fprintf(fp,"%d,%02d,%02d,%02d,%02d,%02d,%09ld,%02x,%02x,%02x,%02x,%02x,%02x,%u,%u\n"
+    ,tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec,ts.tv_nsec
+    ,head->addr[0],head->addr[1],head->addr[2],head->addr[3],head->addr[4],head->addr[5]
+    ,head->hop,head->seq
+    );
+    fclose(fp);
+}
+
+void output_data_csv_space(){
+    if((fp = fopen(filename,"a+")) == NULL){
+        printf("can't open file");
+        exit(1);
+    }
+    fprintf(fp,"\n");
+    fclose(fp);
+}
+
 void print_routing_table(routing_table_t* routing_t){
     routing_table_entry_t* current =routing_t->head;
     printf("----------routing table----------\n");
@@ -594,8 +620,11 @@ void print_routing_table(routing_table_t* routing_t){
         printf("Sequence Number: %u\n",current->seq);
         printf("table size: %d\n",routing_t->size);
         i++;
+        output_data_csv(current);
+        
         current = current->next;
     }
+    
     printf("---------------end----------------\n");
     
 }
@@ -727,6 +756,8 @@ packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_fram
     }else{
         //insert
         printf("insert packet table\n");
+        //セグメントエラーがデータパケットの中継中に出た
+        
         packet_table_entry_t* new_entry = (packet_table_entry_t* )malloc(sizeof(packet_table_entry_t));
         memset(new_entry, 0, sizeof(packet_table_entry_t));
         //packet save 要注意！！！！！
@@ -1251,7 +1282,7 @@ void receivepacket() {
     {
         if(receive(message)) {
             mac_frame_header_t* p = (mac_frame_header_t*)message;
-            //get_time_now();
+            get_time_now();
             time(&after_backoff);
             //checksum function
             
@@ -1381,10 +1412,25 @@ double return_backoff_time(double backoff,time_t backoff_now){
     return return_backoff;
 }
 
-
-
+void file_open(char* file_name){//file_name = 〇〇.csv
+    //create result file csv
+    //FILE *fp;
+    if((fp = fopen(file_name,"w")) == NULL){
+        printf("can't open %s",file_name);
+        exit(1);
+    }
+    fprintf(fp,"年,月,日,時,分,秒,nsec,srcAddress,srcAddress,srcAddress,srcAddress,srcAddress,srcAddress,hop,seq\n");
+    fclose(fp);
+}
 
 int main (int argc, char *argv[]) {
+    if(argv[1]){
+        filename = argv[1];
+        file_open(filename);
+    }else if(!argv[1]){
+        printf("保存ファイルを設定してください.\n");
+        exit(1);
+    }
     /*
     if (argc < 2) {
         printf ("Usage: argv[0] sender|rec [message]\n");
