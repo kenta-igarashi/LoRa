@@ -562,13 +562,15 @@ int get_routing_table(mac_frame_header_t* hello){
         current->seqNum  = current_entry->seq;
         //current->DestAddr = current_entry->addr;
         mac_set_addr(current_entry->addr,current->DestAddr);
-        current = current++;
+        //current = current++;
+        ++current;
         i++;
         current_entry = current_entry->next;
     }
+    /*
     for(int j = 0;j<i;j++){
         printf("%02x",current[j]);
-    }
+    }*/
     printf("\n");
    return i;
 }
@@ -622,17 +624,19 @@ void add_routing_table(mac_frame_header_t* hdr){
     }
     * */
     if(len == 0) return;
+    /*
     int i = 0;
     while(i == len){
         insert_routing_table(entry->DestAddr,entry->Hop+1,entry->seqNum);
-        entry = entry++;
+        ++entry;
         i++;
     }
-    /*
+    */
+    
     for(int i = 0; i<len;i++){
-        insert_routing_table(entry->DestAddr,entry[i]->Hop,entry[i]->seqNum);
+        insert_routing_table((entry+i)->DestAddr,(entry+i)->Hop,(entry+i)->seqNum);
     }
-    * */
+    
     /*
     while(current){//current!=NULL
         insert_routing_table(current->addr,current->hop+1,current->seq);
