@@ -504,6 +504,9 @@ void insert_routing_table(uint8_t* addr,uint8_t hop,uint8_t seq){
         
     }*/
     // else if(current->addr == addr){
+    else if(is_same_addr(my_addr,addr)){
+        printf("自身なのでルーティングテーブルにいれません.\n");
+    }
     else if(current && is_same_addr(my_addr,addr)){
         printf("自身なのでルーティングテーブルにいれません.\n");
     }
@@ -1194,8 +1197,6 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
                 //if(p_entry){//受信済み
         //if(current->hop >= data_p->destHop){
         p_entry->flag = ACK;
-        //}
-    //}
     }
     else if(packet_p->type == DATA){
             print_mac_frame_header(packet_p);
