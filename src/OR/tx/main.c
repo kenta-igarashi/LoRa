@@ -1220,7 +1220,7 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
             //送信モード
             set_txmode();
             txlora((byte*)Ack,(byte)Ack_p->len);
-            
+            sleep(100000);
             //受信モードに切り替え
             set_rxmode();
             
