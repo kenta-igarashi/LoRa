@@ -504,9 +504,6 @@ void insert_routing_table(uint8_t* addr,uint8_t hop,uint8_t seq){
         
     }*/
     // else if(current->addr == addr){
-    else if(current && is_same_addr(my_addr,addr)){
-        printf("自身なのでルーティングテーブルにいれません.\n");
-    }
     else if(current && is_same_addr(current->addr,addr)){
         //update
         if(current->seq < seq){
@@ -1456,6 +1453,8 @@ int main (int argc, char *argv[]) {
     }else if(!argv[1]){
         printf("保存ファイルを設定してください.\n");
         exit(1);
+    }else if (){
+        
     }
     /*
     if (argc < 2) {
