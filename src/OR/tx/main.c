@@ -1233,12 +1233,14 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
             mac_set_addr(packet_p->DestAddr,Ack_p->DestAddr);
             mac_set_addr(packet_p->SourceAddr,Ack_p->SourceAddr);
             
+            
+            
             mac_print_addr(Ack_p->DestAddr);
             mac_print_addr(Ack_p->SourceAddr);
             printf("seqnum: %u\n",Ack_p->seqNum);
             //送信モード
             set_txmode();
-            txlora((byte*)Ack,(byte)Ack_p->len);
+            txlora((byte*)&Ack,(byte)Ack_p->len);
             //sleep(100000);
             //受信モードに切り替え
             set_rxmode();
@@ -1531,7 +1533,7 @@ int main (int argc, char *argv[]) {
     Hello_p->seqNum = 0;
     
     Ack_p->type = ACK;
-    mac_set_addr(my_addr,Ack_p->SourceAddr);
+    //mac_set_addr(my_addr,Ack_p->SourceAddr);
     Ack_p->seqNum = 0;
     Ack_p->len = sizeof(mac_frame_header_t);
     
