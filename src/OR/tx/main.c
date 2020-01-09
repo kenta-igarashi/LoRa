@@ -152,7 +152,7 @@
 //ハローかパケットかの判別
 #define HELLO 0b10000000 //128
 #define DATA   0b00001000 //8
-#define ACK   0b00000001
+#define ACK   0b10001000
 
 #define USER_DATA_FRAME_LEN 1500
 #define USER_CTRL_FRAME_LEN 100
