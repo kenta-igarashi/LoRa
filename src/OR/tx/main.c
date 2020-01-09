@@ -1193,6 +1193,8 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
     routing_table_entry_t* current = r_table->head;
     if(packet_p->type == ACK){
         printf("ACK dataなので転送を中止します.\n");
+        mac_print_addr(packet_p->SourceAddr);
+        printf("seqnum: %u\n",packet_p->seqNum);
         packet_table_entry_t* p_entry = insert_packet_table(packet_p->SourceAddr,packet_p->seqNum,packet_p);
         printf("debug6\n");
                 //if(p_entry){//受信済み
