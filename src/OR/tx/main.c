@@ -726,7 +726,7 @@ void print_packet_table(){
         printf("Node%d ",i);
         mac_print_addr(current->srcAddr);
         printf("Sequence Number: %u\n",current->seq);
-        printf("flag           : %u",current->flag);
+        printf("flag           : %u\n",current->flag);
         printf("table size     : %d\n",p_table->size);
         i++;
         current = current->next;
@@ -1193,10 +1193,13 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
     or_data_packet_t* data_p = (or_data_packet_t*)packet_p->payload;
     routing_table_entry_t* current = r_table->head;
     if(packet_p->type == ACK){
+        printf("ACK dataなので転送を中止します.\n");
         packet_table_entry_t* p_entry = insert_packet_table(packet_p->SourceAddr,packet_p->seqNum,packet_p);
+        printf("debug6\n");
                 //if(p_entry){//受信済み
         //if(current->hop >= data_p->destHop){
         p_entry->flag = ACK;
+        printf("debug7\n");
     }
     else if(packet_p->type == DATA){
             print_mac_frame_header(packet_p);
@@ -1208,7 +1211,7 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
                 message[i] =data_p->message[i];
             }
             printf("payload message : %s\n",message);
-            
+            printf("ACKを送信します.\n");
             Ack_p->seqNum = packet_p->seqNum;
             mac_set_addr(packet_p->DestAddr,Ack_p->DestAddr);
             mac_set_addr(packet_p->SourceAddr,Ack_p->SourceAddr);
