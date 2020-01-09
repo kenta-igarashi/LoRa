@@ -384,7 +384,8 @@ void mac_tx_frame_data_init(mac_frame_header_t* frame){
 void print_mac_frame_header(mac_frame_header_t* data){
     printf("mac packet header   : \n");
     if(data->type == HELLO) printf("type: HELLO\n");
-    else printf("type                : DATA\n");
+    else if(data->type == DATA) printf("type                : DATA\n");
+    else if(data->type == ACK) printf("type                : ACK\n");
     //printf("type: %u\n",data->type);
     printf("Source      ");
     mac_print_addr(data->SourceAddr);
@@ -1223,16 +1224,21 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
             
         //if(is_same_addr(my_addr,packet_p->DestAddr)){//宛先端末が自分の場合
         if(is_same_addr(my_addr,packet_p->DestAddr)){//宛先端末が自分の場合
+            /*
             for(int i = 0;i<sizeof(data_p->message)/sizeof(data_p->message[0]);i++){
                 message[i] =data_p->message[i];
             }
-            printf("payload message : %s\n",message);
+            * */
+            //printf("payload message : %s\n",message);
             printf("ACKを送信します.\n");
         
             Ack_p->seqNum = packet_p->seqNum;
             mac_set_addr(packet_p->DestAddr,Ack_p->DestAddr);
             mac_set_addr(packet_p->SourceAddr,Ack_p->SourceAddr);
             
+            mac_print_addr(packet_p->DestAddr);
+            mac_print_addr(packet_p->SourceAddr);
+            printf("seqnum: %u\n",packet_p->seqNum);            
             
             
             mac_print_addr(Ack_p->DestAddr);
