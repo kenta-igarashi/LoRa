@@ -773,6 +773,7 @@ packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_fram
     }
     
     if(current && is_same_seq(current->seq,seq)){
+        print_packet_table();
         /*
         //update
         printf("data update\n");
@@ -789,17 +790,16 @@ packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_fram
         packet_table_entry_t* new_entry = (packet_table_entry_t* )malloc(sizeof(packet_table_entry_t));
         memset(new_entry, 0, sizeof(packet_table_entry_t));
         //packet save 要注意！！！！！
-        printf("debug1\n");
         //new_entry->packet = (byte*)malloc((int)packet->len);
         new_entry->packet = (mac_frame_header_t*)malloc((int)packet->len);
         memcpy(new_entry->packet,packet,(int)packet->len);
-        printf("debug2\n");
+
         mac_set_addr(srcAddr, new_entry->srcAddr);
         new_entry->seq = seq;
         new_entry->flag = DATA ;//1 = data , 2 = ack
         new_entry->next = NULL;
         (p_table)->size++;
-        printf("debug3\n");
+
         if(!prev){
             new_entry->next = p_table->head;
             p_table->head = new_entry;            
@@ -807,7 +807,6 @@ packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_fram
             new_entry->next = prev->next;
             prev->next = new_entry;
         }
-        printf("debug4\n");
     }
     print_packet_table();
     return NULL;
