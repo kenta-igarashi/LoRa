@@ -771,8 +771,22 @@ packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_fram
         prev = current;
         current = current->next;
     }
-    
+
     if(current && is_same_seq(current->seq,seq)){
+        
+        //-----------------------------------------------------
+        routing_table_entry_t* r_current = r_table->head;
+        while(r_current && !is_same_addr(r_current->addr,packet->DestAddr)){//宛先端末のホップ数を調べる
+            r_current = r_current->next;
+        }
+        or_data_packet_t* data_p = (or_data_packet_t*)packet->payload;
+        
+        if(r_current->hop >= data_p->destHop){
+            //p_entry->flag = ACK;
+            current->flag = ACK;
+        }
+        //-----------------------------------------------------------
+        
         print_packet_table();
         /*
         //update
@@ -788,6 +802,7 @@ packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_fram
         //セグメントエラーがデータパケットの中継中に出た
         
         packet_table_entry_t* new_entry = (packet_table_entry_t* )malloc(sizeof(packet_table_entry_t));
+       
         memset(new_entry, 0, sizeof(packet_table_entry_t));
         //packet save 要注意！！！！！
         //new_entry->packet = (byte*)malloc((int)packet->len);
@@ -807,9 +822,9 @@ packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_fram
             new_entry->next = prev->next;
             prev->next = new_entry;
         }
+        print_packet_table();
+        return new_entry;
     }
-    print_packet_table();
-    return NULL;
 }
 
 void insert_backoff(uint8_t* srcAddr,uint16_t seq,double backoff,time_t backoff_now){//,uint8_t flag){
@@ -1213,14 +1228,18 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
             }
             printf("payload message : %s\n",message);
             printf("ACKを送信します.\n");
+        
             Ack_p->seqNum = packet_p->seqNum;
             mac_set_addr(packet_p->DestAddr,Ack_p->DestAddr);
             mac_set_addr(packet_p->SourceAddr,Ack_p->SourceAddr);
             
+            mac_print_addr(Ack_p->DestAddr);
+            mac_print_addr(Ack_p->SourceAddr);
+            printf("seqnum: %u\n",Ack_p->seqNum);
             //送信モード
             set_txmode();
             txlora((byte*)Ack,(byte)Ack_p->len);
-            sleep(100000);
+            //sleep(100000);
             //受信モードに切り替え
             set_rxmode();
             
@@ -1233,21 +1252,20 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
             
             if(current){
                 packet_table_entry_t* p_entry = insert_packet_table(packet_p->SourceAddr,packet_p->seqNum,packet_p);
-                if(p_entry){//受信済み
-                    if(current->hop >= data_p->destHop){
-                        p_entry->flag = ACK;
-                    }
+                if(p_entry->flag != ACK){//受信済み
                     
-                }
-                else{//未受信
+                    
+               // }
+                /*else{//未受信
                     //転送待機時間の算出
-                    
+                  */  
                         double bo = OR_calculate_backoff(data_p->destHop,current->hop);
                         time(&after_backoff);
                         insert_backoff(packet_p->SourceAddr,packet_p->seqNum,bo,after_backoff);
                 
                     
                 }
+                
             }
         }
     }
