@@ -1229,6 +1229,7 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
                 message[i] =data_p->message[i];
             }
             * */
+            printf("%s\n",data_p->message);
             //printf("payload message : %s\n",message);
             printf("ACKを送信します.\n");
         
