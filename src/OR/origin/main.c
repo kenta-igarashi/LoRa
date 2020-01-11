@@ -1456,15 +1456,14 @@ void file_open(char* file_name){//file_name = 〇〇.csv
 }
 
 int main (int argc, char *argv[]) {
-    int r_table_size;
-    int data_size;
     if(argv[1]){
         filename = argv[1];
         file_open(filename);
     }else if(!argv[1]){
         printf("保存ファイルを設定してください.\n");
         exit(1);
-    }else if(!argv[2]){
+    }
+    /*else if(!argv[2]){
         printf("ルーティングテーブルのサイズを指定してください.\n");
         exit(1);
     }else if(argv[2]){
@@ -1475,7 +1474,7 @@ int main (int argc, char *argv[]) {
     }else if(argv[3]){
         data_size = atoi(argv[3]);
     }
-    
+    */
     /*
     if (argc < 2) {
         printf ("Usage: argv[0] sender|rec [message]\n");
@@ -1591,7 +1590,7 @@ int main (int argc, char *argv[]) {
                     dequeue_backoff_table();
                 }
             }
-        }else if(r_table_size == 5 ){
+        }else{//else if(r_table_size == 5 ){
             //printf("%d\n",count);
             count=0;
             //時間測定
@@ -1650,12 +1649,11 @@ int main (int argc, char *argv[]) {
             //Hello_p->len = total_len;
             //txlora((byte*)&Hello, total_len);
             //////
-            data_packet->seqNum++;
+            Hello_p->seqNum++;
             
-            //int num = get_routing_table(Hello_p);
+            int num = get_routing_table(Hello_p);
             int header_len = sizeof(mac_frame_header_t);
-            //int payload_len = num * sizeof(mac_frame_payload_t);
-            int payload_len = sizeof(or_data_packet_t);
+            int payload_len = num * sizeof(mac_frame_payload_t);
             printf("%d %d\n",header_len,payload_len);
             int total_len = header_len + payload_len;
             printf("total length: %d\n",total_len);
@@ -1663,16 +1661,12 @@ int main (int argc, char *argv[]) {
                 printf("最大ペイロードサイズを超えています.\n");
                 return 0;
             }else{
-                if(data_size < total_len){
-                    printf("指定されたデータサイズが送信するデータサイズを下回っています.\n");
-                }else{
-                    data_packet->len = total_len;
-                    /*
-                    for(int i = 53;i<255;i++){
-                        Hello[i] =0x11;
-                    } */
-                    txlora((byte*)&Hello, (byte)data_size);
-                }
+                data_packet->len = total_len;
+                /*
+                for(int i = 53;i<255;i++){
+                    Hello[i] =0x11;
+                } */
+                txlora((byte*)&Hello, (byte)total_len);
             }
             
                 

@@ -341,7 +341,6 @@ void mac_set_bc_addr(uint8_t* target){
  */
  
 void mac_tx_frame_header_init(mac_frame_header_t* hdr){
-    //mac_frame_header_t* hdr =hello_pack;
     hdr->type = HELLO;
     mac_set_bc_addr(hdr->SourceAddr);
     mac_set_bc_addr(hdr->DestAddr);
@@ -1209,14 +1208,14 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
     routing_table_entry_t* current = r_table->head;
     if(packet_p->type == ACK){
         printf("ACK dataなので転送を中止します.\n");
+        /*
         mac_print_addr(packet_p->SourceAddr);
         printf("seqnum: %u\n",packet_p->seqNum);
+        */
         packet_table_entry_t* p_entry = insert_packet_table(packet_p->SourceAddr,packet_p->seqNum,packet_p);
-        printf("debug6\n");
                 //if(p_entry){//受信済み
         //if(current->hop >= data_p->destHop){
         p_entry->flag = ACK;
-        printf("debug7\n");
     }
     else if(packet_p->type == DATA){
             print_mac_frame_header(packet_p);
@@ -1224,11 +1223,7 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
             
         //if(is_same_addr(my_addr,packet_p->DestAddr)){//宛先端末が自分の場合
         if(is_same_addr(my_addr,packet_p->DestAddr)){//宛先端末が自分の場合
-            /*
-            for(int i = 0;i<sizeof(data_p->message)/sizeof(data_p->message[0]);i++){
-                message[i] =data_p->message[i];
-            }
-            * */
+            
             printf("%s\n",data_p->message);
             //printf("payload message : %s\n",message);
             printf("ACKを送信します.\n");
@@ -1236,12 +1231,7 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
             Ack_p->seqNum = packet_p->seqNum;
             mac_set_addr(packet_p->DestAddr,Ack_p->DestAddr);
             mac_set_addr(packet_p->SourceAddr,Ack_p->SourceAddr);
-            
-            mac_print_addr(packet_p->DestAddr);
-            mac_print_addr(packet_p->SourceAddr);
-            printf("seqnum: %u\n",packet_p->seqNum);            
-            
-            
+
             mac_print_addr(Ack_p->DestAddr);
             mac_print_addr(Ack_p->SourceAddr);
             printf("seqnum: %u\n",Ack_p->seqNum);
@@ -1674,7 +1664,7 @@ int main (int argc, char *argv[]) {
                 for(int i = 53;i<255;i++){
                     Hello[i] =0x11;
                 } */
-                txlora((byte*)&Hello, total_len);
+                txlora((byte*)&Hello, (byte)total_len);
             }
             
                 

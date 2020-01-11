@@ -544,7 +544,8 @@ int get_routing_table(mac_frame_header_t* hello){
         current->seqNum  = current_entry->seq;
         //current->DestAddr = current_entry->addr;
         mac_set_addr(current_entry->addr,current->DestAddr);
-        current = current++;
+        //current = current++;
+        ++current;
         i++;
         current_entry = current_entry->next;
     }
@@ -709,10 +710,7 @@ void judge_tansfer_data(mac_frame_header_t* packet_p){
         
         //if(is_same_addr(my_addr,packet_p->DestAddr)){//宛先端末が自分の場合
         if(is_same_addr(my_addr,data_p->DestAddr)){//宛先端末が自分の場合
-            for(int i = 0;i<sizeof(data_p->message)/sizeof(data_p->message[0]);i++){
-                message[i] =data_p->message[i];
-            }
-            printf("payload message: %s\n",message);
+            printf("payload message: %s\n",data_p->message);
         }else{//自分ではない場合
             printf("transfer data\n");
             //転送待機時間の算出
