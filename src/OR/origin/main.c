@@ -1662,6 +1662,7 @@ int main (int argc, char *argv[]) {
                 printf("最大ペイロードサイズを超えています.\n");
                 return 0;
             }else{
+                Hello_p->len = total_len;
                 /*
                 for(int i = 53;i<255;i++){
                     Hello[i] =0x11;
