@@ -1378,8 +1378,17 @@ void receivepacket() {
                 printf("\n");
                 //printf("Payload: %s\n", message);
 
+                if(p->type == HELLO){
+
+                print_mac_frame_header(p);
+    
+        
+                insert_routing_table(p->SourceAddr, 1, p->seqNum);
+                add_routing_table(p);
+                print_routing_table(r_table);
+                }    
                 // sousinsitayatu
-                judge_transfer_data(p);
+                //judge_transfer_data(p);
 
                 // payload no entry list.
                 /*num_entry = p->len - sizeof(mac_frame_header_t) / sizeof(mac_lora_frame_header_t);
@@ -1454,9 +1463,19 @@ void file_open(char* file_name){//file_name = 〇〇.csv
     fprintf(fp,"time,nsec,srcAddress,hop,seq\n");
     fclose(fp);
 }
+routing_table_entry_t* check_routing_table(uint8_t* destaddr){
+    routing_table_entry_t* current = r_table->head;
+    
+    while(current){
+        current = current->next;
+        if(is_same_addr(current->addr,destaddr)){
+            return current;
+        }
+    }
+    return NULL;
+}
 
 int main (int argc, char *argv[]) {
-    int r_table_size;
     int data_size;
     if(argv[1]){
         filename = argv[1];
@@ -1465,17 +1484,19 @@ int main (int argc, char *argv[]) {
         printf("保存ファイルを設定してください.\n");
         exit(1);
     }else if(!argv[2]){
-        printf("ルーティングテーブルのサイズを指定してください.\n");
+        printf("data packetのサイズを指定してください.\n");
+        exit(1);
+    }else if(argv[2]){
+        data_size = atoi(argv[2]);
+    }
+    /*
+    else if(!argv[2]){
+        printf("宛先アドレスを指定してください.\n");
         exit(1);
     }else if(argv[2]){
          r_table_size = atoi(argv[2]);
-    }else if(!argv[3]){
-        printf("data packetのサイズを指定してください.\n");
-        exit(1);
-    }else if(argv[3]){
-        data_size = atoi(argv[3]);
     }
-    
+    */
     /*
     if (argc < 2) {
         printf ("Usage: argv[0] sender|rec [message]\n");
@@ -1537,8 +1558,6 @@ int main (int argc, char *argv[]) {
     uint8_t dest_addr[6] = {0xb8,0x27,0xeb,0x60,0xf7,0xbf};
     mac_set_addr(dest_addr,data_packet->DestAddr);
     
-    //mac_print_addr(hello->SourceAddr);
-    
     //時刻を一秒追加
     time(&later);
     later+=5;
@@ -1562,13 +1581,13 @@ int main (int argc, char *argv[]) {
                 receivepacket(); 
                 
            // }
-           
-            
+
             //if(bo_st->head && (now <= bo_st->head->backoff)){
             //if(bo_st->head && (now > return_backoff_time(bo_st->head->backoff))){
+            
+            /*
             if(bo_st->head ){
                 if(now > return_backoff_time(bo_st->head->backoff,bo_st->head->backoff_now)){
-                    //printf("debugだよ\n");
                     //return_backoff_time(bo_st->head->backoff);
                     packet_table_entry_t* p_entry = check_packet_table(bo_st->head->srcAddr,bo_st->head->seqNum);
                     if(p_entry->flag != ACK){
@@ -1590,8 +1609,8 @@ int main (int argc, char *argv[]) {
                     }
                     dequeue_backoff_table();
                 }
-            }
-        }else if(r_table_size == 5 ){
+            }*/
+        }else if(now > later){
             //printf("%d\n",count);
             count=0;
             //時間測定
@@ -1663,7 +1682,8 @@ int main (int argc, char *argv[]) {
                 printf("最大ペイロードサイズを超えています.\n");
                 return 0;
             }else{
-                if(data_size < total_len){
+                //if(data_size < total_len){
+                if(0){
                     printf("指定されたデータサイズが送信するデータサイズを下回っています.\n");
                 }else{
                     data_packet->len = total_len;
@@ -1671,7 +1691,20 @@ int main (int argc, char *argv[]) {
                     for(int i = 53;i<255;i++){
                         Hello[i] =0x11;
                     } */
-                    txlora((byte*)&Hello, (byte)data_size);
+                    
+                    routing_table_entry_t* toDest = check_routing_table(dest_addr);
+                    
+                    if(!toDest){
+                        printf("指定された宛先アドレスがルーティングテーブルに存在しません.\n");
+                    }
+                    else{
+                        ((or_data_packet_t*)data_packet->payload)->destHop = toDest->hop;
+                        //print_mac_frame_header(data_packet);
+                        //print_data_frame(data_packet);
+                        txlora((byte*)&data, (byte)total_len);
+                        //txlora((byte*)&data, (byte)100);
+                        usleep(250000);
+                    }
                 }
             }
             

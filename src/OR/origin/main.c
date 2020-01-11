@@ -395,7 +395,6 @@ void print_mac_frame_header(mac_frame_header_t* data){
     mac_print_addr(data->DestAddr);
     printf("length              : %u\n",data->len);
     printf("sequence number     : %u\n",data->seqNum);
-    printf("payload             : %s\n",data->payload);
     printf("\n");
 }
 
@@ -1142,7 +1141,7 @@ void txlora(byte *frame, byte datalen) {
     
     printf("\n");
     //printf("seq: %d",seqNum);
-    printf("send: %s\n", frame);
+    //printf("send: %s\n", frame);
     
     //確認
     mac_frame_header_t* p_frame = (mac_frame_header_t*)frame;
