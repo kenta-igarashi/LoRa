@@ -1657,6 +1657,7 @@ int main (int argc, char *argv[]) {
             printf("%d %d\n",header_len,payload_len);
             int total_len = header_len + payload_len;
             printf("total length: %d\n",total_len);
+            
             if(total_len >= 255){
                 printf("最大ペイロードサイズを超えています.\n");
                 return 0;
