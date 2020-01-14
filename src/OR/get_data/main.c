@@ -231,7 +231,7 @@ typedef struct{
     //uint8_t DestAddr[6];
     //uint16_t seqNum;
     //unsigned char message[100]; 
-    char message[20]; 
+    uint8_t message[]; 
 }__attribute__((packed))or_data_packet_t;
 
 typedef struct routing_table_entry_struct{
@@ -375,12 +375,12 @@ void mac_tx_hello_frame_payload_init(mac_frame_header_t* hdr){
     payload->seqNum = 0;
 }
 void mac_tx_data_frame_payload_init(mac_frame_header_t* frame){
-    or_data_packet_t* data_frame = (or_data_packet_t*)frame;
+    or_data_packet_t* data_frame = (or_data_packet_t*)frame->payload;
     data_frame->srcHop = 0;
     data_frame->destHop = 0;
-    //mac_set_bc_addr(data_frame->DestAddr);
-    //data_frame->seqNum = 0;
-    memset(&(data_frame->message),0,sizeof(message));
+    for(unsigned int i = 0;i < 255 - sizeof(mac_frame_header_t) - sizeof(or_data_packet_t);i++){
+        data_frame->message[i] = 0x11;
+    }
 }
 
 void print_mac_frame_header(mac_frame_header_t* data){
@@ -1253,7 +1253,7 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
             }*/
             if(current){
                 packet_table_entry_t* p_entry = insert_packet_table(packet_p->SourceAddr,packet_p->seqNum,packet_p);
-                if(p_entry->flag != ACK){//受信済み
+                if(p_entry->flag != ACK){//受信してない
                // }
                 /*else{//未受信
                     //転送待機時間の算出
@@ -1483,11 +1483,13 @@ int main (int argc, char *argv[]) {
     }else if(!argv[1]){
         printf("保存ファイルを設定してください.\n");
         exit(1);
-    }else if(!argv[2]){
+    }
+    if(!argv[2]){
         printf("data packetのサイズを指定してください.\n");
         exit(1);
     }else if(argv[2]){
         data_size = atoi(argv[2]);
+        printf("data size: %d\n",data_size);
     }
     /*
     else if(!argv[2]){
@@ -1672,11 +1674,12 @@ int main (int argc, char *argv[]) {
             data_packet->seqNum++;
             
             //int num = get_routing_table(Hello_p);
-            int header_len = sizeof(mac_frame_header_t);
+            //int header_len = sizeof(mac_frame_header_t);
             //int payload_len = num * sizeof(mac_frame_payload_t);
-            int payload_len = sizeof(or_data_packet_t);
-            printf("%d %d\n",header_len,payload_len);
-            int total_len = header_len + payload_len;
+            //int payload_len = sizeof(or_data_packet_t);
+            //printf("%d %d\n",header_len,payload_len);
+            //int total_len = header_len + payload_len;
+            int total_len = data_size;
             printf("total length: %d\n",total_len);
             if(total_len >= 255){
                 printf("最大ペイロードサイズを超えています.\n");
@@ -1702,7 +1705,6 @@ int main (int argc, char *argv[]) {
                         //print_mac_frame_header(data_packet);
                         //print_data_frame(data_packet);
                         txlora((byte*)&data, (byte)total_len);
-                        //txlora((byte*)&data, (byte)100);
                         usleep(250000);
                     }
                 }
