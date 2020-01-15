@@ -1509,8 +1509,9 @@ void receivepacket() {
                 printf("\n");
                 //printf("Payload: %s\n", message);
                 
-                output_data_csv_RSSI(packetrssi,rssi,SNR,(int)receivedbytes,rx_filename);
-                
+                if(p->type == DATA || p->type == ACK){
+                    output_data_csv_RSSI(packetrssi,rssi,SNR,(int)receivedbytes,rx_filename);
+                }
                 // sousinsitayatu
                 judge_transfer_data(p);
 
