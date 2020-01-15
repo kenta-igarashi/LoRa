@@ -1232,12 +1232,12 @@ boolean calc_checksum(mac_frame_header_t* hdr,int len){
     printf("rx        :%u\n",current_checksum);
     return current_checksum == prev_checksum;
 }
-void get_time_now(struct timespec ts ,struct tm tm){
+void get_time_now(struct timespec times ,struct tm tm){
     //struct timespec ts;
     //struct tm tm_tx,tm_rx;
-    clock_gettime(CLOCK_REALTIME,&ts);
-    localtime_r(&ts.tv_sec,&tm);
-    printf("rx time:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm.tm_year+1900,tm.tm_mon+1,tm.tm_mday,tm.tm_hour,tm.tm_min,tm.tm_sec,ts.tv_nsec);
+    clock_gettime(CLOCK_REALTIME,&times);
+    localtime_r(&times.tv_sec,&tm);
+    printf("rx time:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm.tm_year+1900,tm.tm_mon+1,tm.tm_mday,tm.tm_hour,tm.tm_min,tm.tm_sec,times.tv_nsec);
     //printf("difftime:")
 }
 
@@ -1458,7 +1458,6 @@ void receivepacket() {
         if(receive(message)) {
             mac_frame_header_t* p = (mac_frame_header_t*)message;
             get_time_now(ts_rx,tm_rx);
-            output_data_csv_rx_time(rx_filename);
             time(&after_backoff);
             //checksum function
             
@@ -1510,6 +1509,7 @@ void receivepacket() {
                 //printf("Payload: %s\n", message);
                 
                 if(p->type == DATA || p->type == ACK){
+                    output_data_csv_rx_time(rx_filename);
                     output_data_csv_RSSI(packetrssi,rssi,SNR,(int)receivedbytes,rx_filename);
                 }
                 // sousinsitayatu
