@@ -308,7 +308,7 @@ uint16_t current_checksum;
 
 //現在時刻の取得
 struct timespec ts_tx,ts_rx;
-struct tm tm_rx,tm_tx;
+struct tm tm_tx,tm_rx;
 time_t after_backoff;
 
 /*ノードの固有値
@@ -607,11 +607,12 @@ void output_data_csv_rx_time(char* filename){
     char time[50];
     
     if((fp = fopen(filename,"a+")) == NULL){
-        printf("can't open file");
+        printf("can't open file\n");
         exit(1);
     }
     sprintf(time,"%d/%02d/%02d %02d:%02d:%02d",tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec);
     fprintf(fp,"%s,%09ld,",time,ts_rx.tv_nsec);
+    printf("rx time:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec,ts_rx.tv_nsec);
     fclose(fp);
 }
 void output_data_csv_tx_time(char* filename){
