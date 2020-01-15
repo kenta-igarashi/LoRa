@@ -1609,7 +1609,7 @@ void rx_file_open(char* file_name){//file_name = 〇〇.csv
         printf("can't open %s\n",file_name);
         exit(1);
     }
-    fprintf(fp,"rx_time,PacketRSSI,RSSI,SNR,lora_length,,Type,pattern,srcAddr,destAddr,length,seq,tx_checksum,rx_checksum,,srcHop,destHop\n");
+    fprintf(fp,"rx_time,nsec,PacketRSSI,RSSI,SNR,lora_length,,Type,pattern,srcAddr,destAddr,length,seq,tx_checksum,rx_checksum,,srcHop,destHop\n");
     fclose(fp);
 }
 
