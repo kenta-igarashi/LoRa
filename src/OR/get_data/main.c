@@ -612,7 +612,7 @@ void output_data_csv_tx_time(int txbytes){
     }
     sprintf(time,"%d/%02d/%02d %02d:%02d:%02d",tm_tx.tm_year+1900,tm_tx.tm_mon+1,tm_tx.tm_mday,tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec);
     sprintf(add_time,"%02d:%02d:%02d",tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec);
-    fprintf(fp,"%s,%s,%09ld,%d,",time,add_time,ts.tv_nsec,txbytes);
+    fprintf(fp,"%s,%s,%09ld,%d,,",time,add_time,ts.tv_nsec,txbytes);
     fclose(fp);
 }
 
@@ -1221,6 +1221,7 @@ void txlora(byte *frame, byte datalen) {
         output_data_csv_tx_time((int)datalen);
         output_data_csv_tx_hdr(p_frame);
         output_data_csv_ordata((or_data_packet_t*)p_frame->payload);
+        output_data_csv_space();
     }
     
     //printf("length: %d\n",sizeof(Hello));
