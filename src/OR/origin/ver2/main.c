@@ -883,6 +883,7 @@ packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_fram
         }else if(current->flag == ACK){
             //4
             output_data_csv_hdr(packet,rx_filename,4);
+            output_data_csv_ordata(data_p,rx_filename);
         }
         //-----------------------------------------------------------
         
@@ -1224,22 +1225,28 @@ uint16_t checksum(byte *data,int len){
 
 boolean calc_checksum(mac_frame_header_t* hdr,int len){
     mac_frame_header_t *tmp = hdr;
-    uint16_t prev_checksum = 0;
+    prev_checksum = 0;
     prev_checksum = hdr->checksum;
     
     tmp->checksum = 0;
-    uint16_t current_checksum = checksum((byte*)tmp,len);
+    current_checksum = checksum((byte*)tmp,len);
     printf("origin(tx):%u\n",prev_checksum);
     printf("rx        :%u\n",current_checksum);
     return current_checksum == prev_checksum;
 }
-void get_time_now(struct timespec times ,struct tm tm){
+void get_time_rx_now(){//struct timespec *times ,struct tm *tm){
     //struct timespec ts;
     //struct tm tm_tx,tm_rx;
-    clock_gettime(CLOCK_REALTIME,&times);
-    localtime_r(&times.tv_sec,&tm);
-    printf("rx time:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm.tm_year+1900,tm.tm_mon+1,tm.tm_mday,tm.tm_hour,tm.tm_min,tm.tm_sec,times.tv_nsec);
+    clock_gettime(CLOCK_REALTIME,&ts_rx);
+    localtime_r(&ts_rx.tv_sec,&tm_rx);
+    printf("rx time:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec,ts_rx.tv_nsec);
     //printf("difftime:")
+}
+
+void get_time_tx_now(){
+    clock_gettime(CLOCK_REALTIME,&ts_tx);
+    localtime_r(&ts_tx.tv_sec,&tm_tx);
+    printf("tx time:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm_tx.tm_year+1900,tm_tx.tm_mon+1,tm_tx.tm_mday,tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec,ts_tx.tv_nsec);
 }
 
 void txlora(byte *frame, byte datalen) {
@@ -1249,7 +1256,8 @@ void txlora(byte *frame, byte datalen) {
     ((mac_frame_header_t*)frame)->checksum = checksum(frame,(int)datalen);
     printf("checksum: %u\n",((mac_frame_header_t*)frame)->checksum);
 
-    get_time_now(ts_tx,tm_tx);
+    //get_time_now(&ts_tx,&tm_tx);
+    get_time_tx_now();
 
     // set the IRQ mapping DIO0=TxDone DIO1=NOP DIO2=NOP
     writeReg(RegDioMapping1, MAP_DIO0_LORA_TXDONE|MAP_DIO1_LORA_NOP|MAP_DIO2_LORA_NOP);
@@ -1458,7 +1466,8 @@ void receivepacket() {
     {
         if(receive(message)) {
             mac_frame_header_t* p = (mac_frame_header_t*)message;
-            get_time_now(ts_rx,tm_rx);
+            //get_time_now(&ts_rx,&tm_rx);
+            get_time_rx_now();
             time(&after_backoff);
             //checksum function
             
