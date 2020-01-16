@@ -1592,7 +1592,7 @@ void output_data_csv_backoff_time(char* filename,time_t start_backoff_time,doubl
     char buf[128];
     struct tm ptm;
     //ptm = localtime(&start_backoff_time);
-    localtime_r(&start_backoff_time,&ptm);
+    //localtime_r(&start_backoff_time,&ptm);
     strftime(buf,sizeof(buf),"%Y/%m/%d %H:%M:%S",&ptm);
 	fprintf(fp_tx,"%s,%lf,",buf,backoff);
 	fclose(fp_tx);
@@ -1772,7 +1772,7 @@ int main (int argc, char *argv[]) {
                         //送信モード
                         set_txmode();
                         
-                        output_data_csv_backoff_time(tx_filename,bo_st->head->backoff,bo_st->head->backoff_now);
+                        output_data_csv_backoff_time(tx_filename,bo_st->head->backoff_now,bo_st->head->backoff);
                         output_data_csv_tx_time(tx_filename);
                         txlora((byte*)p_entry->packet,(byte)p_entry->packet->len);
                         
