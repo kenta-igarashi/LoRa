@@ -611,7 +611,7 @@ void output_data_csv_rx_time(char* filename){
         exit(1);
     }
     sprintf(time,"%d/%02d/%02d %02d:%02d:%02d",tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec);
-    sprintf(add_time,"%02d:%02d:%02d.%09ld",tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec,ts_rx.tv_nsec);
+    sprintf(add_time,"%02d:%02d:%02d",tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec);
     fprintf(fp_rx,"%s,%09ld,%s,",time,ts_rx.tv_nsec,add_time);
     //printf("debug rx time:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec,ts_rx.tv_nsec);
     printf("%s",add_time);
@@ -625,7 +625,7 @@ void output_data_csv_tx_time(char* filename){
         exit(1);
     }
     sprintf(time,"%d/%02d/%02d %02d:%02d:%02d",tm_tx.tm_year+1900,tm_tx.tm_mon+1,tm_tx.tm_mday,tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec);
-    sprintf(add_time,"%02d:%02d:%02d.%09ld",tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec,ts_tx.tv_nsec);
+    sprintf(add_time,"%02d:%02d:%02d",tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec);
     fprintf(fp_rx,"%s,%09ld,%s,",time,ts_tx.tv_nsec,add_time);
     fclose(fp_rx);
 }
@@ -1632,7 +1632,7 @@ void rx_file_open(char* file_name){//file_name = 〇〇.csv
         printf("can't open %s\n",file_name);
         exit(1);
     }
-    fprintf(fp_rx,"rx_time,nsec,rx_time+nsec,PacketRSSI,RSSI,SNR,lora_length,,Type,pattern,srcAddr,destAddr,length,seq,tx_checksum,rx_checksum,,srcHop,destHop\n");
+    fprintf(fp_rx,"rx_time,nsec,time,PacketRSSI,RSSI,SNR,lora_length,,Type,pattern,srcAddr,destAddr,length,seq,tx_checksum,rx_checksum,,srcHop,destHop\n");
     fclose(fp_rx);
 }
 
@@ -1641,7 +1641,7 @@ void tx_file_open(char* file_name){
         printf("can't open %s\n",file_name);
         exit(1);
     }
-    fprintf(fp_tx,"backoff_start_time,backoff_value,tx_time,nsec,tx_time+nsec,,Type,srcAddr,destAddr,length,seq,tx_checksum,,srcHop,destHop\n");
+    fprintf(fp_tx,"backoff_start_time,backoff_value,tx_time,nsec,time,,Type,srcAddr,destAddr,length,seq,tx_checksum,,srcHop,destHop\n");
     fclose(fp_tx);
 }
 
