@@ -611,7 +611,7 @@ void output_data_csv_rx_time(char* filename){
         exit(1);
     }
     sprintf(time,"%d/%02d/%02d %02d:%02d:%02d",tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec);
-    sprintf(add_time,"%s.%09ld",time,ts_rx.tv_nsec);
+    sprintf(add_time,"%02d:%02d:%02d.%09ld",tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec,ts_rx.tv_nsec);
     fprintf(fp_rx,"%s,%09ld,%s,",time,ts_rx.tv_nsec,add_time);
     //printf("debug rx time:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec,ts_rx.tv_nsec);
     printf("%s",add_time);
@@ -625,7 +625,7 @@ void output_data_csv_tx_time(char* filename){
         exit(1);
     }
     sprintf(time,"%d/%02d/%02d %02d:%02d:%02d",tm_tx.tm_year+1900,tm_tx.tm_mon+1,tm_tx.tm_mday,tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec);
-    sprintf(add_time,"%s.%09ld",time,ts_tx.tv_nsec);
+    sprintf(add_time,"%02d:%02d:%02d.%09ld",tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec,ts_tx.tv_nsec);
     fprintf(fp_rx,"%s,%09ld,%s,",time,ts_tx.tv_nsec,add_time);
     fclose(fp_rx);
 }
