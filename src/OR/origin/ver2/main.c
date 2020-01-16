@@ -1592,7 +1592,7 @@ void output_data_csv_backoff_time(char* filename,time_t start_backoff_time,doubl
     char buf[128];
     struct tm ptm;
     //ptm = localtime(&start_backoff_time);
-    //localtime_r(&start_backoff_time,&ptm);
+    localtime_r(&start_backoff_time,&ptm);
     strftime(buf,sizeof(buf),"%Y/%m/%d %H:%M:%S",&ptm);
 	fprintf(fp_tx,"%s,%lf,",buf,backoff);
 	fclose(fp_tx);
