@@ -611,8 +611,8 @@ void output_data_csv_rx_time(char* filename){
         exit(1);
     }
     sprintf(time,"%d/%02d/%02d %02d:%02d:%02d",tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec);
-    fprintf(fp_rx,"%s,%09ld,",time,ts_rx.tv_nsec);
-    printf("debug rx time:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec,ts_rx.tv_nsec);
+    fprintf(fp_rx,"%s,%09ld,%s.%09ld,",time,ts_rx.tv_nsec,time,ts_rx.tv_nsec);
+    //printf("debug rx time:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec,ts_rx.tv_nsec);
     fclose(fp_rx);
 }
 void output_data_csv_tx_time(char* filename){
@@ -623,7 +623,7 @@ void output_data_csv_tx_time(char* filename){
         exit(1);
     }
     sprintf(time,"%d/%02d/%02d %02d:%02d:%02d",tm_tx.tm_year+1900,tm_tx.tm_mon+1,tm_tx.tm_mday,tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec);
-    fprintf(fp_rx,"%s,%09ld,",time,ts_tx.tv_nsec);
+    fprintf(fp_rx,"%s,%09ld,%s.%09ld,",time,ts_tx.tv_nsec,time,ts_tx.tv_nsec);
     fclose(fp_rx);
 }
 /*
@@ -1584,7 +1584,7 @@ packet_table_entry_t* check_packet_table(uint8_t *srcAddr,uint16_t seq){//,uint8
     return NULL;
 }
 void output_data_csv_backoff_time(char* filename,time_t start_backoff_time,double backoff){
-    if((fp_tx = fopen(filename,"w")) == NULL){
+    if((fp_tx = fopen(filename,"a+")) == NULL){
         printf("can't open %s\n",filename);
         exit(1);
     }
@@ -1627,7 +1627,7 @@ void rx_file_open(char* file_name){//file_name = 〇〇.csv
         printf("can't open %s\n",file_name);
         exit(1);
     }
-    fprintf(fp_rx,"rx_time,nsec,PacketRSSI,RSSI,SNR,lora_length,,Type,pattern,srcAddr,destAddr,length,seq,tx_checksum,rx_checksum,,srcHop,destHop\n");
+    fprintf(fp_rx,"rx_time,nsec,rx_time+nsec,PacketRSSI,RSSI,SNR,lora_length,,Type,pattern,srcAddr,destAddr,length,seq,tx_checksum,rx_checksum,,srcHop,destHop\n");
     fclose(fp_rx);
 }
 
@@ -1636,7 +1636,7 @@ void tx_file_open(char* file_name){
         printf("can't open %s\n",file_name);
         exit(1);
     }
-    fprintf(fp_tx,"backoff_start_time,backoff_value,tx_time,,Type,srcAddr,destAddr,length,seq,tx_checksum,,srcHop,destHop\n");
+    fprintf(fp_tx,"backoff_start_time,backoff_value,tx_time,nsec,tx_time+nsec,,Type,srcAddr,destAddr,length,seq,tx_checksum,,srcHop,destHop\n");
     fclose(fp_tx);
 }
 
@@ -1648,6 +1648,7 @@ int main (int argc, char *argv[]) {
         printf("パケット受信保存ファイルを設定してください.\n");
         exit(1);
     }
+    
     if(argv[2]){
         tx_filename = argv[2];
         tx_file_open(tx_filename);
