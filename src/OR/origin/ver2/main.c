@@ -295,7 +295,7 @@ backoff_t* bo_st = NULL;
 packet_table_t* p_table = NULL;
 
 //file open
-FILE *fp;
+FILE *fp_rx,*fp_tx;
 char* rx_filename;
 char* tx_filename;
 //char* save_data_rx = {"result_rx.csv"}
@@ -606,26 +606,27 @@ int get_routing_table(mac_frame_header_t* hello){
 void output_data_csv_rx_time(char* filename){
     char time[50];
     
-    if((fp = fopen(filename,"a+")) == NULL){
+    if((fp_rx = fopen(filename,"a+")) == NULL){
         printf("can't open file\n");
         exit(1);
     }
     sprintf(time,"%d/%02d/%02d %02d:%02d:%02d",tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec);
-    fprintf(fp,"%s,%09ld,",time,ts_rx.tv_nsec);
+    fprintf(fp_rx,"%s,%09ld,",time,ts_rx.tv_nsec);
     printf("debug rx time:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec,ts_rx.tv_nsec);
-    fclose(fp);
+    fclose(fp_rx);
 }
 void output_data_csv_tx_time(char* filename){
     char time[50];
     
-    if((fp = fopen(filename,"a+")) == NULL){
+    if((fp_rx = fopen(filename,"a+")) == NULL){
         printf("can't open file");
         exit(1);
     }
     sprintf(time,"%d/%02d/%02d %02d:%02d:%02d",tm_tx.tm_year+1900,tm_tx.tm_mon+1,tm_tx.tm_mday,tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec);
-    fprintf(fp,"%s,%09ld,",time,ts_tx.tv_nsec);
-    fclose(fp);
+    fprintf(fp_rx,"%s,%09ld,",time,ts_tx.tv_nsec);
+    fclose(fp_rx);
 }
+/*
 void output_data_csv(routing_table_entry_t* head, char* filename){
     char address[20];
     
@@ -637,17 +638,17 @@ void output_data_csv(routing_table_entry_t* head, char* filename){
     
     fprintf(fp,"%s,%u,%u,",address,head->hop,head->seq);
     
-    /*
+    
     fprintf(fp,"%d,%02d,%02d,%02d,%02d,%02d,%09ld,%02x,%02x,%02x,%02x,%02x,%02x,%u,%u\n"
     ,tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec,ts.tv_nsec
     ,head->addr[0],head->addr[1],head->addr[2],head->addr[3],head->addr[4],head->addr[5]
     ,head->hop,head->seq
     );
-    * */
+    
     fclose(fp);
 }
-
-void output_data_csv_space(char* filename){
+*/
+void output_data_csv_space(FILE* fp,char* filename){
     if((fp = fopen(filename,"a+")) == NULL){
         printf("can't open file");
         exit(1);
@@ -798,7 +799,7 @@ char* judge_packet_type(mac_frame_header_t* hdr,char* packet_type){
 }
 
 void output_data_csv_hdr(mac_frame_header_t* hdr,char* filename,int pattern){
-    if((fp = fopen(filename,"a+")) == NULL){
+    if((fp_rx = fopen(filename,"a+")) == NULL){
         printf("can't open file");
         exit(1);
     }
@@ -808,12 +809,12 @@ void output_data_csv_hdr(mac_frame_header_t* hdr,char* filename,int pattern){
     sprintf(srcaddr,"%02x:%02x:%02x:%02x:%02x:%02x",hdr->SourceAddr[0],hdr->SourceAddr[1],hdr->SourceAddr[2],hdr->SourceAddr[3],hdr->SourceAddr[4],hdr->SourceAddr[5]);
     sprintf(destaddr,"%02x:%02x:%02x:%02x:%02x:%02x",hdr->DestAddr[0],hdr->DestAddr[1],hdr->DestAddr[2],hdr->DestAddr[3],hdr->DestAddr[4],hdr->DestAddr[5]);
     
-    fprintf(fp,"%s,%d,%s,%s,%u,%u,%u,%u,,"
+    fprintf(fp_rx,"%s,%d,%s,%s,%u,%u,%u,%u,,"
     ,judge_packet_type(hdr,type),pattern,srcaddr,destaddr,hdr->len,hdr->seqNum,prev_checksum,current_checksum
     );
-    fclose(fp);
+    fclose(fp_rx);
 }
-void output_data_csv_ordata(or_data_packet_t* hdr,char* filename){
+void output_data_csv_ordata(FILE *fp,or_data_packet_t* hdr,char* filename){
     if((fp = fopen(filename,"a+")) == NULL){
         printf("can't open file");
         exit(1);
@@ -823,7 +824,7 @@ void output_data_csv_ordata(or_data_packet_t* hdr,char* filename){
 }
 
 void output_data_csv_tx_hdr(mac_frame_header_t* hdr,char* filename){
-    if((fp = fopen(filename,"a+")) == NULL){
+    if((fp_tx = fopen(filename,"a+")) == NULL){
         printf("can't open %s\n",filename);
         exit(1);
     }
@@ -833,10 +834,10 @@ void output_data_csv_tx_hdr(mac_frame_header_t* hdr,char* filename){
     sprintf(srcaddr,"%02x:%02x:%02x:%02x:%02x:%02x",hdr->SourceAddr[0],hdr->SourceAddr[1],hdr->SourceAddr[2],hdr->SourceAddr[3],hdr->SourceAddr[4],hdr->SourceAddr[5]);
     sprintf(destaddr,"%02x:%02x:%02x:%02x:%02x:%02x",hdr->DestAddr[0],hdr->DestAddr[1],hdr->DestAddr[2],hdr->DestAddr[3],hdr->DestAddr[4],hdr->DestAddr[5]);
     
-    fprintf(fp,"%s,%s,%s,%u,%u,%u,,"
+    fprintf(fp_tx,"%s,%s,%s,%u,%u,%u,,"
     ,judge_packet_type(hdr,type),srcaddr,destaddr,hdr->len,hdr->seqNum,hdr->checksum
     );
-    fclose(fp);
+    fclose(fp_tx);
 }
 
 packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_frame_header_t* packet){//,uint8_t flag){
@@ -873,17 +874,17 @@ packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_fram
                 //p_entry->flag = ACK;
                 current->flag = ACK;
                 output_data_csv_hdr(packet,rx_filename,2);
-                output_data_csv_ordata(data_p,rx_filename);
+                output_data_csv_ordata(fp_rx,data_p,rx_filename);
             } else{
                 //3
                 output_data_csv_hdr(packet,rx_filename,3);
-                output_data_csv_ordata(data_p,rx_filename);
+                output_data_csv_ordata(fp_rx,data_p,rx_filename);
             }
             
         }else if(current->flag == ACK){
             //4
             output_data_csv_hdr(packet,rx_filename,4);
-            output_data_csv_ordata(data_p,rx_filename);
+            output_data_csv_ordata(fp_rx,data_p,rx_filename);
         }
         //-----------------------------------------------------------
         
@@ -895,7 +896,7 @@ packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_fram
             current->
         }
         */
-        output_data_csv_space(rx_filename);
+        output_data_csv_space(fp_rx,rx_filename);
         return current;
     }else{
         //パターン１・・未受信でデータ受信
@@ -904,7 +905,7 @@ packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_fram
         if(packet->type == DATA){
             //1
             output_data_csv_hdr(packet,rx_filename,1);
-            output_data_csv_ordata(data_p,rx_filename);
+            output_data_csv_ordata(fp_rx,data_p,rx_filename);
         }
         else{//type==ACK
             //5
@@ -944,7 +945,7 @@ packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_fram
         }
         print_packet_table();
         
-        output_data_csv_space(rx_filename);
+        output_data_csv_space(fp_rx,rx_filename);
         
         return new_entry;
     }
@@ -1293,12 +1294,13 @@ void txlora(byte *frame, byte datalen) {
         print_data_frame(p_frame);
         printf("------------------\n");
         output_data_csv_tx_hdr(p_frame,tx_filename);
-        output_data_csv_ordata(((or_data_packet_t*)p_frame->payload),tx_filename);
+        output_data_csv_ordata(fp_tx,((or_data_packet_t*)p_frame->payload),tx_filename);
     }else if(p_frame->type == ACK){
         print_mac_frame_header(p_frame);
         printf("------------------\n");
         output_data_csv_tx_hdr(p_frame,tx_filename);
     }
+    output_data_csv_space(fp_tx,tx_filename);
     //printf("length: %d\n",sizeof(Hello));
     
 
@@ -1367,7 +1369,12 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
             printf("%s\n",data_p->message);
             //printf("payload message : %s\n",message);
             printf("ACKを送信します.\n");
-        
+            
+            //パターン１
+            output_data_csv_hdr(packet_p,rx_filename,1);
+            output_data_csv_ordata(fp_rx,((or_data_packet_t*)packet_p->payload),rx_filename);
+            output_data_csv_space(fp_rx,rx_filename);
+            
             Ack_p->seqNum = packet_p->seqNum;
             mac_set_addr(packet_p->DestAddr,Ack_p->DestAddr);
             mac_set_addr(packet_p->SourceAddr,Ack_p->SourceAddr);
@@ -1418,12 +1425,12 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
 
 
 void output_data_csv_RSSI(int Packet_RSSI,int RSSI,long int SNR,int lora_length,char* filename){
-    if((fp = fopen(filename,"a+")) == NULL){
+    if((fp_rx = fopen(filename,"a+")) == NULL){
         printf("can't open file");
         exit(1);
     }
-    fprintf(fp,"%d,%d,%li,%i,,",Packet_RSSI,RSSI,SNR,lora_length);
-    fclose(fp);
+    fprintf(fp_rx,"%d,%d,%li,%i,,",Packet_RSSI,RSSI,SNR,lora_length);
+    fclose(fp_rx);
 }
 
 boolean receive(char *payload) {
@@ -1577,7 +1584,7 @@ packet_table_entry_t* check_packet_table(uint8_t *srcAddr,uint16_t seq){//,uint8
     return NULL;
 }
 void output_data_csv_backoff_time(char* filename,time_t start_backoff_time,double backoff){
-    if((fp = fopen(filename,"w")) == NULL){
+    if((fp_tx = fopen(filename,"w")) == NULL){
         printf("can't open %s\n",filename);
         exit(1);
     }
@@ -1585,8 +1592,8 @@ void output_data_csv_backoff_time(char* filename,time_t start_backoff_time,doubl
     struct tm *ptm;
     ptm = localtime(&start_backoff_time);
     strftime(buf,sizeof(buf),"%Y/%m/%d %H:%M:%S",ptm);
-	fprintf(fp,"%s,%lf,",buf,backoff);
-	fclose(fp);
+	fprintf(fp_tx,"%s,%lf,",buf,backoff);
+	fclose(fp_tx);
 }
 /*
 void output_data_csv_time_now(char* filename,struct tm now){
@@ -1616,21 +1623,21 @@ double return_backoff_time(double backoff,time_t backoff_now){
 void rx_file_open(char* file_name){//file_name = 〇〇.csv
     //create result file csv
     //FILE *fp;
-    if((fp = fopen(file_name,"w")) == NULL){
+    if((fp_rx = fopen(file_name,"w")) == NULL){
         printf("can't open %s\n",file_name);
         exit(1);
     }
-    fprintf(fp,"rx_time,nsec,PacketRSSI,RSSI,SNR,lora_length,,Type,pattern,srcAddr,destAddr,length,seq,tx_checksum,rx_checksum,,srcHop,destHop\n");
-    fclose(fp);
+    fprintf(fp_rx,"rx_time,nsec,PacketRSSI,RSSI,SNR,lora_length,,Type,pattern,srcAddr,destAddr,length,seq,tx_checksum,rx_checksum,,srcHop,destHop\n");
+    fclose(fp_rx);
 }
 
 void tx_file_open(char* file_name){
-    if((fp = fopen(file_name,"w")) == NULL){
+    if((fp_tx = fopen(file_name,"w")) == NULL){
         printf("can't open %s\n",file_name);
         exit(1);
     }
-    fprintf(fp,"backoff_start_time,backoff_value,tx_time,,Type,srcAddr,destAddr,length,seq,tx_checksum,,srcHop,destHop\n");
-    fclose(fp);
+    fprintf(fp_tx,"backoff_start_time,backoff_value,tx_time,,Type,srcAddr,destAddr,length,seq,tx_checksum,,srcHop,destHop\n");
+    fclose(fp_tx);
 }
 
 int main (int argc, char *argv[]) {
@@ -1644,7 +1651,7 @@ int main (int argc, char *argv[]) {
     if(argv[2]){
         tx_filename = argv[2];
         tx_file_open(tx_filename);
-    }else if(!argv[1]){
+    }else if(!argv[2]){
         printf("パケット送信保存ファイルを設定してください.\n");
         exit(1);
     }/*
