@@ -1295,12 +1295,13 @@ void txlora(byte *frame, byte datalen) {
         printf("------------------\n");
         output_data_csv_tx_hdr(p_frame,tx_filename);
         output_data_csv_ordata(fp_tx,((or_data_packet_t*)p_frame->payload),tx_filename);
+        output_data_csv_space(fp_tx,tx_filename);
     }else if(p_frame->type == ACK){
         print_mac_frame_header(p_frame);
         printf("------------------\n");
         output_data_csv_tx_hdr(p_frame,tx_filename);
+        output_data_csv_space(fp_tx,tx_filename);
     }
-    output_data_csv_space(fp_tx,tx_filename);
     //printf("length: %d\n",sizeof(Hello));
     
 
@@ -1589,9 +1590,10 @@ void output_data_csv_backoff_time(char* filename,time_t start_backoff_time,doubl
         exit(1);
     }
     char buf[128];
-    struct tm *ptm;
-    ptm = localtime(&start_backoff_time);
-    strftime(buf,sizeof(buf),"%Y/%m/%d %H:%M:%S",ptm);
+    struct tm ptm;
+    //ptm = localtime(&start_backoff_time);
+    localtime_r(&start_backoff_time,&ptm);
+    strftime(buf,sizeof(buf),"%Y/%m/%d %H:%M:%S",&ptm);
 	fprintf(fp_tx,"%s,%lf,",buf,backoff);
 	fclose(fp_tx);
 }
