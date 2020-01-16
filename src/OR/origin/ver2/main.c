@@ -612,7 +612,7 @@ void output_data_csv_rx_time(char* filename){
     }
     sprintf(time,"%d/%02d/%02d %02d:%02d:%02d",tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec);
     sprintf(add_time,"%02d:%02d:%02d",tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec);
-    fprintf(fp_rx,"%s,%09ld,%s,",time,ts_rx.tv_nsec,add_time);
+    fprintf(fp_rx,"%s,%s,%09ld,",time,add_time,ts_rx.tv_nsec);
     //printf("debug rx time:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec,ts_rx.tv_nsec);
     printf("%s",add_time);
     fclose(fp_rx);
@@ -620,14 +620,14 @@ void output_data_csv_rx_time(char* filename){
 void output_data_csv_tx_time(char* filename){
     char time[50];
     char add_time[100];
-    if((fp_rx = fopen(filename,"a+")) == NULL){
+    if((fp_tx = fopen(filename,"a+")) == NULL){
         printf("can't open file");
         exit(1);
     }
     sprintf(time,"%d/%02d/%02d %02d:%02d:%02d",tm_tx.tm_year+1900,tm_tx.tm_mon+1,tm_tx.tm_mday,tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec);
     sprintf(add_time,"%02d:%02d:%02d",tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec);
-    fprintf(fp_rx,"%s,%09ld,%s,",time,ts_tx.tv_nsec,add_time);
-    fclose(fp_rx);
+    fprintf(fp_tx,"%s,%s,%09ld,",time,add_time,ts_tx.tv_nsec);
+    fclose(fp_tx);
 }
 /*
 void output_data_csv(routing_table_entry_t* head, char* filename){
@@ -801,7 +801,7 @@ char* judge_packet_type(mac_frame_header_t* hdr,char* packet_type){
     return NULL;
 }
 
-void output_data_csv_hdr(mac_frame_header_t* hdr,char* filename,int pattern){
+void output_data_csv_rx_hdr(mac_frame_header_t* hdr,char* filename,int pattern){
     if((fp_rx = fopen(filename,"a+")) == NULL){
         printf("can't open file");
         exit(1);
@@ -876,17 +876,17 @@ packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_fram
                 //2..ACKする場合
                 //p_entry->flag = ACK;
                 current->flag = ACK;
-                output_data_csv_hdr(packet,rx_filename,2);
+                output_data_csv_rx_hdr(packet,rx_filename,2);
                 output_data_csv_ordata(fp_rx,data_p,rx_filename);
             } else{
                 //3
-                output_data_csv_hdr(packet,rx_filename,3);
+                output_data_csv_rx_hdr(packet,rx_filename,3);
                 output_data_csv_ordata(fp_rx,data_p,rx_filename);
             }
             
         }else if(current->flag == ACK){
             //4
-            output_data_csv_hdr(packet,rx_filename,4);
+            output_data_csv_rx_hdr(packet,rx_filename,4);
             output_data_csv_ordata(fp_rx,data_p,rx_filename);
         }
         //-----------------------------------------------------------
@@ -907,12 +907,12 @@ packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_fram
         or_data_packet_t* data_p = (or_data_packet_t*)packet->payload;
         if(packet->type == DATA){
             //1
-            output_data_csv_hdr(packet,rx_filename,1);
+            output_data_csv_rx_hdr(packet,rx_filename,1);
             output_data_csv_ordata(fp_rx,data_p,rx_filename);
         }
         else{//type==ACK
             //5
-            output_data_csv_hdr(packet,rx_filename,5);
+            output_data_csv_rx_hdr(packet,rx_filename,5);
         }
         
         //insert
@@ -1296,12 +1296,14 @@ void txlora(byte *frame, byte datalen) {
         print_mac_frame_header(p_frame);
         print_data_frame(p_frame);
         printf("------------------\n");
+        output_data_csv_tx_time(tx_filename);
         output_data_csv_tx_hdr(p_frame,tx_filename);
         output_data_csv_ordata(fp_tx,((or_data_packet_t*)p_frame->payload),tx_filename);
         output_data_csv_space(fp_tx,tx_filename);
     }else if(p_frame->type == ACK){
         print_mac_frame_header(p_frame);
         printf("------------------\n");
+        output_data_csv_tx_time(tx_filename);
         output_data_csv_tx_hdr(p_frame,tx_filename);
         output_data_csv_space(fp_tx,tx_filename);
     }
@@ -1375,7 +1377,7 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
             printf("ACKを送信します.\n");
             
             //パターン１
-            output_data_csv_hdr(packet_p,rx_filename,1);
+            output_data_csv_rx_hdr(packet_p,rx_filename,1);
             output_data_csv_ordata(fp_rx,((or_data_packet_t*)packet_p->payload),rx_filename);
             output_data_csv_space(fp_rx,rx_filename);
             
@@ -1632,7 +1634,7 @@ void rx_file_open(char* file_name){//file_name = 〇〇.csv
         printf("can't open %s\n",file_name);
         exit(1);
     }
-    fprintf(fp_rx,"rx_time,nsec,time,PacketRSSI,RSSI,SNR,lora_length,,Type,pattern,srcAddr,destAddr,length,seq,tx_checksum,rx_checksum,,srcHop,destHop\n");
+    fprintf(fp_rx,"rx_time,time,nsec,PacketRSSI,RSSI,SNR,lora_length,,Type,pattern,srcAddr,destAddr,length,seq,tx_checksum,rx_checksum,,srcHop,destHop\n");
     fclose(fp_rx);
 }
 
@@ -1641,7 +1643,7 @@ void tx_file_open(char* file_name){
         printf("can't open %s\n",file_name);
         exit(1);
     }
-    fprintf(fp_tx,"backoff_start_time,backoff_value,tx_time,nsec,time,,Type,srcAddr,destAddr,length,seq,tx_checksum,,srcHop,destHop\n");
+    fprintf(fp_tx,"backoff_start_time,backoff_value,tx_time,time,nsec,,Type,srcAddr,destAddr,length,seq,tx_checksum,,srcHop,destHop\n");
     fclose(fp_tx);
 }
 
@@ -1776,7 +1778,7 @@ int main (int argc, char *argv[]) {
                         set_txmode();
                         
                         output_data_csv_backoff_time(tx_filename,bo_st->head->backoff_now,bo_st->head->backoff);
-                        output_data_csv_tx_time(tx_filename);
+                        //output_data_csv_tx_time(tx_filename);
                         txlora((byte*)p_entry->packet,(byte)p_entry->packet->len);
                         
                         //受信モードに切り替え

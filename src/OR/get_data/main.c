@@ -298,7 +298,7 @@ uint8_t my_addr[6]={};
 
 //現在時刻の取得
 struct timespec ts;
-struct tm tm_rx;
+struct tm tm_rx,tm_tx;
 time_t after_backoff;
 
 /*ノードの固有値
@@ -603,6 +603,19 @@ void output_data_csv_time(){
     fclose(fp);
 }
 
+void output_data_csv_tx_time(int txbytes){
+    char time[50];
+    char add_time[100];
+    if((fp = fopen(filename,"a+")) == NULL){
+        printf("can't open file");
+        exit(1);
+    }
+    sprintf(time,"%d/%02d/%02d %02d:%02d:%02d",tm_tx.tm_year+1900,tm_tx.tm_mon+1,tm_tx.tm_mday,tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec);
+    sprintf(add_time,"%02d:%02d:%02d",tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec);
+    fprintf(fp,"%s,%s,%09ld,%d,",time,add_time,ts.tv_nsec,txbytes);
+    fclose(fp);
+}
+
 void output_data_csv(routing_table_entry_t* head){
     char address[20];
     
@@ -623,7 +636,45 @@ void output_data_csv(routing_table_entry_t* head){
     * */
     fclose(fp);
 }
+char* judge_packet_type(mac_frame_header_t* hdr,char* packet_type){
+    if(hdr->type == HELLO){
+        strcpy(packet_type,"HELLO");
+        return  packet_type;
+    }
+    else if(hdr->type == DATA){
+        strcpy(packet_type,"DATA");
+        return  packet_type;
+    }else if(hdr->type == ACK){
+        strcpy(packet_type,"ACK");
+        return packet_type;
+    }
+    return NULL;
+}
 
+void output_data_csv_tx_hdr(mac_frame_header_t* hdr){
+    if((fp = fopen(filename,"a+")) == NULL){
+        printf("can't open %s\n",filename);
+        exit(1);
+    }
+    char type[20];
+    char srcaddr[20];
+    char destaddr[20];
+    sprintf(srcaddr,"%02x:%02x:%02x:%02x:%02x:%02x",hdr->SourceAddr[0],hdr->SourceAddr[1],hdr->SourceAddr[2],hdr->SourceAddr[3],hdr->SourceAddr[4],hdr->SourceAddr[5]);
+    sprintf(destaddr,"%02x:%02x:%02x:%02x:%02x:%02x",hdr->DestAddr[0],hdr->DestAddr[1],hdr->DestAddr[2],hdr->DestAddr[3],hdr->DestAddr[4],hdr->DestAddr[5]);
+    
+    fprintf(fp,"%s,%s,%s,%u,%u,%u,,"
+    ,judge_packet_type(hdr,type),srcaddr,destaddr,hdr->len,hdr->seqNum,hdr->checksum
+    );
+    fclose(fp);
+}
+void output_data_csv_ordata(or_data_packet_t* hdr){
+    if((fp = fopen(filename,"a+")) == NULL){
+        printf("can't open file");
+        exit(1);
+    }
+    fprintf(fp,"%u,%u",hdr->srcHop,hdr->destHop);
+    fclose(fp);
+}
 void output_data_csv_space(){
     if((fp = fopen(filename,"a+")) == NULL){
         printf("can't open file");
@@ -642,7 +693,7 @@ void print_routing_table(routing_table_t* routing_t){
         printf("data nothing\n");
         return ;
     }
-    output_data_csv_time();
+    //output_data_csv_time();
     while(current){//current!=NULL
         printf("Node%d ",i);
         mac_print_addr(current->addr);
@@ -650,11 +701,11 @@ void print_routing_table(routing_table_t* routing_t){
         printf("Sequence Number: %u\n",current->seq);
         printf("table size: %d\n",routing_t->size);
         i++;
-        output_data_csv(current);
+        //output_data_csv(current);
         
         current = current->next;
     }
-    output_data_csv_space();
+    //output_data_csv_space();
     printf("---------------end----------------\n");
     
 }
@@ -1115,14 +1166,25 @@ boolean calc_checksum(mac_frame_header_t* hdr,int len){
     return current == prev_checksum;
 }
 
-
+void get_time_now(){
+    //struct timespec ts;
+    //struct tm tm_tx,tm_rx;
+    clock_gettime(CLOCK_REALTIME,&ts);
+    //localtime_r(&ts.tv_sec,&tm_rx);
+    localtime_r(&ts.tv_sec,&tm_tx);
+    printf("rxtime:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm_tx.tm_year+1900,tm_tx.tm_mon+1,tm_tx.tm_mday,tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec,ts.tv_nsec);
+    //printf("difftime:")
+}
 void txlora(byte *frame, byte datalen) {
 
     //checksum function
     ((mac_frame_header_t*)frame)->checksum = 0;//送信するたびに0に初期化しないと値が一致しない
     ((mac_frame_header_t*)frame)->checksum = checksum(frame,(int)datalen);
     printf("checksum: %u\n",((mac_frame_header_t*)frame)->checksum);
-
+    
+    //tx time
+    get_time_now();
+    
     // set the IRQ mapping DIO0=TxDone DIO1=NOP DIO2=NOP
     writeReg(RegDioMapping1, MAP_DIO0_LORA_TXDONE|MAP_DIO1_LORA_NOP|MAP_DIO2_LORA_NOP);
     // clear all radio IRQ flags
@@ -1156,6 +1218,9 @@ void txlora(byte *frame, byte datalen) {
         print_mac_frame_header(p_frame);
         print_data_frame(p_frame);
         printf("------------------\n");
+        output_data_csv_tx_time((int)datalen);
+        output_data_csv_tx_hdr(p_frame);
+        output_data_csv_ordata((or_data_packet_t*)p_frame->payload);
     }
     
     //printf("length: %d\n",sizeof(Hello));
@@ -1279,14 +1344,6 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
     }
 }
 
-void get_time_now(){
-    //struct timespec ts;
-    //struct tm tm_tx,tm_rx;
-    clock_gettime(CLOCK_REALTIME,&ts);
-    localtime_r(&ts.tv_sec,&tm_rx);
-    printf("rxtime:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec,ts.tv_nsec);
-    //printf("difftime:")
-}
 
 boolean receive(char *payload) {
     // clear rxDone
@@ -1328,7 +1385,7 @@ void receivepacket() {
     {
         if(receive(message)) {
             mac_frame_header_t* p = (mac_frame_header_t*)message;
-            get_time_now();
+            //get_time_now();
             time(&after_backoff);
             //checksum function
             
@@ -1380,13 +1437,16 @@ void receivepacket() {
 
                 if(p->type == HELLO){
 
-                print_mac_frame_header(p);
-    
+                    print_mac_frame_header(p);
         
-                insert_routing_table(p->SourceAddr, 1, p->seqNum);
-                add_routing_table(p);
-                print_routing_table(r_table);
-                }    
+            
+                    insert_routing_table(p->SourceAddr, 1, p->seqNum);
+                    add_routing_table(p);
+                    print_routing_table(r_table);
+                }else if(p->type == DATA){
+                    print_mac_frame_header(p);
+                    print_data_frame(p);
+                }
                 // sousinsitayatu
                 //judge_transfer_data(p);
 
@@ -1460,7 +1520,7 @@ void file_open(char* file_name){//file_name = 〇〇.csv
         printf("can't open %s",file_name);
         exit(1);
     }
-    fprintf(fp,"time,nsec,srcAddress,hop,seq\n");
+    fprintf(fp,"tx_time,time,nsec,lora_length,,type,srcAddress,destaddr,length,seq,tx_checksum,,srcHop,destHop\n");
     fclose(fp);
 }
 routing_table_entry_t* check_routing_table(uint8_t* destaddr){
@@ -1477,6 +1537,7 @@ routing_table_entry_t* check_routing_table(uint8_t* destaddr){
 
 int main (int argc, char *argv[]) {
     int data_size;
+    int tx_packet_size;
     if(argv[1]){
         filename = argv[1];
         file_open(filename);
@@ -1490,6 +1551,13 @@ int main (int argc, char *argv[]) {
     }else if(argv[2]){
         data_size = atoi(argv[2]);
         printf("data size: %d\n",data_size);
+    }
+    if(!argv[3]){
+        printf("データパケットの送信回数を指定してください.\n");
+        exit(1);
+    }else if(argv[3]){
+        tx_packet_size = atoi(argv[3]);
+        printf("packet size: %dbytes\n",data_size);
     }
     /*
     else if(!argv[2]){
@@ -1564,7 +1632,8 @@ int main (int argc, char *argv[]) {
     time(&later);
     later+=5;
     //while
-    while(1){
+    //while(1){
+    while(data_packet->seqNum < tx_packet_size){
         time(&now);
         if(now<=later){
             //time(&now);
@@ -1729,6 +1798,7 @@ int main (int argc, char *argv[]) {
         }
         
     }
+    printf("end tx\n");
 
 /*
     if (!strcmp("sender", argv[1])) {
