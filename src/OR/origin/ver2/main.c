@@ -1482,11 +1482,11 @@ void receivepacket() {
             time(&after_backoff);
             //checksum function
             
-                for(int i = 0;i < (int)receivedbytes;i++){
+               /* for(int i = 0;i < (int)receivedbytes;i++){
                     printf("%02x ",message[i]);
                 }
                 printf("\n");
-            
+            */
             if(!calc_checksum(p,(int)receivedbytes)){
                 printf("Length: %i", (int)receivedbytes);
                 printf("パケットを破棄します.\n");
