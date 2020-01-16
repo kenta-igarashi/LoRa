@@ -614,6 +614,7 @@ void output_data_csv_rx_time(char* filename){
     sprintf(add_time,"%s.%09ld",time,ts_rx.tv_nsec);
     fprintf(fp_rx,"%s,%09ld,%s,",time,ts_rx.tv_nsec,add_time);
     //printf("debug rx time:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec,ts_rx.tv_nsec);
+    printf("%s",add_time);
     fclose(fp_rx);
 }
 void output_data_csv_tx_time(char* filename){
