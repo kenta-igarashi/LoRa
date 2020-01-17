@@ -677,7 +677,7 @@ void output_data_csv_ordata(or_data_packet_t* hdr){
     fprintf(fp,"%u,%u",hdr->srcHop,hdr->destHop);
     fclose(fp);
 }
-void output_data_csv_space(){
+void output_data_csv_space(FILE *fp){
     if((fp = fopen(filename,"a+")) == NULL){
         printf("can't open file");
         exit(1);
@@ -695,7 +695,7 @@ void print_routing_table(routing_table_t* routing_t){
         printf("data nothing\n");
         return ;
     }
-    //output_data_csv_time();
+    output_data_csv_time();
     while(current){//current!=NULL
         printf("Node%d ",i);
         mac_print_addr(current->addr);
@@ -1177,6 +1177,7 @@ void get_time_now(){
     printf("rxtime:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm_tx.tm_year+1900,tm_tx.tm_mon+1,tm_tx.tm_mday,tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec,ts.tv_nsec);
     //printf("difftime:")
 }
+
 void txlora(byte *frame, byte datalen) {
 
     //checksum function
@@ -1223,7 +1224,7 @@ void txlora(byte *frame, byte datalen) {
         output_data_csv_tx_time((int)datalen);
         output_data_csv_tx_hdr(p_frame);
         output_data_csv_ordata((or_data_packet_t*)p_frame->payload);
-        output_data_csv_space();
+        output_data_csv_space(filename);
     }
     
     //printf("length: %d\n",sizeof(Hello));

@@ -628,7 +628,7 @@ void output_data_csv_tx_time(char* filename){
     }
     sprintf(time,"%d/%02d/%02d %02d:%02d:%02d",tm_tx.tm_year+1900,tm_tx.tm_mon+1,tm_tx.tm_mday,tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec);
     sprintf(add_time,"%02d:%02d:%02d",tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec);
-    fprintf(fp_tx,"%s,%s,%09ld,",time,add_time,ts_tx.tv_nsec);
+    fprintf(fp_tx,"%s,%s,%09ld,,",time,add_time,ts_tx.tv_nsec);
     fclose(fp_tx);
 }
 
@@ -1332,9 +1332,14 @@ double sigmoid(double gain, double x){
 
 double OR_calculate_backoff(uint8_t desthop,uint8_t hop){
     //or_data_packet_t* data_p = (mac_frame)
-    struct timeval tv;
-    gettimeofday(&tv,NULL);
-    srand((unsigned int)tv.tv_sec * ((unsigned int)tv.tv_usec + 1));
+    //struct timeval tv;
+    struct timespec ts;
+    struct tm tm;
+    //gettimeofday(&tv,NULL);
+    clock_gettime(CLOCK_REALTIME,&ts);
+    localtime_r(&ts.tv_sec,&tm);
+    //srand((unsigned int)tv.tv_sec * ((unsigned int)tv.tv_nsec + 1));
+    srand((unsigned int)tm.tm_sec * ((unsigned int)ts.tv_nsec + 1));
     double expected = (double)desthop - 1;
     double table = (double)hop;
     double gain = 1.0;
@@ -1352,8 +1357,10 @@ double OR_calculate_backoff(uint8_t desthop,uint8_t hop){
     printf("max random backoff:%lf\n",max_random_backoff);
 
     if(max_random_backoff != 0){
+        printf("max random backoff !=0\n");
         backoff += rand() % (int)max_random_backoff;
     }else{
+        printf("max random backoff :0\n");
         backoff += rand() % (10 * 1000);
     }
     printf("backoff           :%lf\n",backoff);
