@@ -30,6 +30,8 @@
 
 #include <sys/time.h>
 #include <math.h>
+//#include "csv.h"
+#include "struct.h"
 // #############################################
 // #############################################
 
@@ -206,12 +208,12 @@ time_t now,later;
 //乱数取得用
 struct timeval tv_rand;
 
+/*
 //パケットヘッダの構造体
 typedef struct{
     uint8_t type;//パケットかデータかの識別
     uint8_t SourceAddr[6]={};
     uint8_t DestAddr[6]={};
-    uint8_t SenderAddr[6]={};
     uint8_t len;
     uint16_t seqNum;
     uint16_t checksum;
@@ -273,6 +275,7 @@ typedef struct{
     packet_table_entry_t* head;
     uint8_t size;
 }packet_table_t;
+*/
 
 /*固定長の配列を宣言しないとバイナリがバグる
  * uint8_tかunsigned charの１バイトで宣言
@@ -292,14 +295,21 @@ backoff_t* bo_st = NULL;
 packet_table_t* p_table = NULL;
 
 //file open
-FILE *fp;
-char* filename;
-
+FILE *fp_rx,*fp_tx,*fp_hop;
+char* rx_filename;
+char* tx_filename;
+char *hop_filename;
+//char* save_data_rx = {"result_rx.csv"}
+//自分のMACアドレス
 uint8_t my_addr[6]={};
 
+//チェックサム用
+uint16_t prev_checksum;
+uint16_t current_checksum;
+
 //現在時刻の取得
-struct timespec ts;
-struct tm tm_rx,tm_tx;
+struct timespec ts_tx,ts_rx;
+struct tm tm_tx,tm_rx;
 time_t after_backoff;
 
 /*ノードの固有値
@@ -380,6 +390,9 @@ void mac_tx_data_frame_payload_init(mac_frame_header_t* frame){
     or_data_packet_t* data_frame = (or_data_packet_t*)frame->payload;
     data_frame->srcHop = 0;
     data_frame->destHop = 0;
+    //mac_set_bc_addr(data_frame->DestAddr);
+    //data_frame->seqNum = 0;
+    //memset(&(data_frame->message),0,sizeof(message));
     for(unsigned int i = 0;i < 255 - sizeof(mac_frame_header_t) - sizeof(or_data_packet_t);i++){
         data_frame->message[i] = 0x11;
     }
@@ -397,7 +410,6 @@ void print_mac_frame_header(mac_frame_header_t* data){
     mac_print_addr(data->DestAddr);
     printf("length              : %u\n",data->len);
     printf("sequence number     : %u\n",data->seqNum);
-    printf("payload             : %s\n",data->payload);
     printf("\n");
 }
 
@@ -462,7 +474,7 @@ void delete_routing_table(uint8_t* addr){
     }
 }
 
-void insert_routing_table(uint8_t* addr,uint8_t hop,uint8_t seq){
+void insert_routing_table(uint8_t* addr,uint8_t hop,uint16_t seq){
 
     routing_table_entry_t* current = r_table->head;
     routing_table_entry_t* previous = NULL;
@@ -593,32 +605,34 @@ int get_routing_table(mac_frame_header_t* hello){
    return i;
 }
 
-void output_data_csv_time(){
+void output_data_csv_rx_time(char* filename){
     char time[50];
-    
-    if((fp = fopen(filename,"a+")) == NULL){
-        printf("can't open file");
+    char add_time[100];
+    if((fp_rx = fopen(filename,"a+")) == NULL){
+        printf("can't open file\n");
         exit(1);
     }
     sprintf(time,"%d/%02d/%02d %02d:%02d:%02d",tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec);
-    fprintf(fp,"%s,%09ld,",time,ts.tv_nsec);
-    fclose(fp);
+    sprintf(add_time,"%02d:%02d:%02d",tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec);
+    fprintf(fp_rx,"%s,%s,%09ld,",time,add_time,ts_rx.tv_nsec);
+    //printf("debug rx time:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec,ts_rx.tv_nsec);
+    //printf("%s",add_time);
+    fclose(fp_rx);
 }
-
-void output_data_csv_tx_time(int txbytes){
+void output_data_csv_tx_time(char* filename){
     char time[50];
     char add_time[100];
-    if((fp = fopen(filename,"a+")) == NULL){
+    if((fp_tx = fopen(filename,"a+")) == NULL){
         printf("can't open file");
         exit(1);
     }
     sprintf(time,"%d/%02d/%02d %02d:%02d:%02d",tm_tx.tm_year+1900,tm_tx.tm_mon+1,tm_tx.tm_mday,tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec);
     sprintf(add_time,"%02d:%02d:%02d",tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec);
-    fprintf(fp,"%s,%s,%09ld,%d,,",time,add_time,ts.tv_nsec,txbytes);
-    fclose(fp);
+    fprintf(fp_tx,"%s,%s,%09ld,",time,add_time,ts_tx.tv_nsec);
+    fclose(fp_tx);
 }
 
-void output_data_csv(routing_table_entry_t* head){
+void output_data_csv(FILE *fp,routing_table_entry_t* head, char* filename){
     char address[20];
     
     if((fp = fopen(filename,"a+")) == NULL){
@@ -635,49 +649,11 @@ void output_data_csv(routing_table_entry_t* head){
     ,head->addr[0],head->addr[1],head->addr[2],head->addr[3],head->addr[4],head->addr[5]
     ,head->hop,head->seq
     );
-    * */
+    */
     fclose(fp);
-}
-char* judge_packet_type(mac_frame_header_t* hdr,char* packet_type){
-    if(hdr->type == HELLO){
-        strcpy(packet_type,"HELLO");
-        return  packet_type;
-    }
-    else if(hdr->type == DATA){
-        strcpy(packet_type,"DATA");
-        return  packet_type;
-    }else if(hdr->type == ACK){
-        strcpy(packet_type,"ACK");
-        return packet_type;
-    }
-    return NULL;
 }
 
-void output_data_csv_tx_hdr(mac_frame_header_t* hdr){
-    if((fp = fopen(filename,"a+")) == NULL){
-        printf("can't open %s\n",filename);
-        exit(1);
-    }
-    char type[20];
-    char srcaddr[20];
-    char destaddr[20];
-    sprintf(srcaddr,"%02x:%02x:%02x:%02x:%02x:%02x",hdr->SourceAddr[0],hdr->SourceAddr[1],hdr->SourceAddr[2],hdr->SourceAddr[3],hdr->SourceAddr[4],hdr->SourceAddr[5]);
-    sprintf(destaddr,"%02x:%02x:%02x:%02x:%02x:%02x",hdr->DestAddr[0],hdr->DestAddr[1],hdr->DestAddr[2],hdr->DestAddr[3],hdr->DestAddr[4],hdr->DestAddr[5]);
-    
-    fprintf(fp,"%s,%s,%s,%u,%u,%u,,"
-    ,judge_packet_type(hdr,type),srcaddr,destaddr,hdr->len,hdr->seqNum,hdr->checksum
-    );
-    fclose(fp);
-}
-void output_data_csv_ordata(or_data_packet_t* hdr){
-    if((fp = fopen(filename,"a+")) == NULL){
-        printf("can't open file");
-        exit(1);
-    }
-    fprintf(fp,"%u,%u",hdr->srcHop,hdr->destHop);
-    fclose(fp);
-}
-void output_data_csv_space(){
+void output_data_csv_space(FILE* fp,char* filename){
     if((fp = fopen(filename,"a+")) == NULL){
         printf("can't open file");
         exit(1);
@@ -695,7 +671,7 @@ void print_routing_table(routing_table_t* routing_t){
         printf("data nothing\n");
         return ;
     }
-    //output_data_csv_time();
+    output_data_csv_rx_time(hop_filename);
     while(current){//current!=NULL
         printf("Node%d ",i);
         mac_print_addr(current->addr);
@@ -703,11 +679,11 @@ void print_routing_table(routing_table_t* routing_t){
         printf("Sequence Number: %u\n",current->seq);
         printf("table size: %d\n",routing_t->size);
         i++;
-        //output_data_csv(current);
+        output_data_csv(fp_hop,current,hop_filename);
         
         current = current->next;
     }
-    //output_data_csv_space();
+    output_data_csv_space(fp_hop,hop_filename);
     printf("---------------end----------------\n");
     
 }
@@ -810,12 +786,73 @@ void print_backoff_table(){
         current = current->next;
     }
     printf("---------------end---------------\n");
-    
-    
 }
+
+char* judge_packet_type(mac_frame_header_t* hdr,char* packet_type){
+    if(hdr->type == HELLO){
+        strcpy(packet_type,"HELLO");
+        return  packet_type;
+    }
+    else if(hdr->type == DATA){
+        strcpy(packet_type,"DATA");
+        return  packet_type;
+    }else if(hdr->type == ACK){
+        strcpy(packet_type,"ACK");
+        return packet_type;
+    }
+    return NULL;
+}
+
+void output_data_csv_rx_hdr(mac_frame_header_t* hdr,char* filename,int pattern){
+    if((fp_rx = fopen(filename,"a+")) == NULL){
+        printf("can't open file");
+        exit(1);
+    }
+    char type[20];
+    char srcaddr[20];
+    char destaddr[20];
+    char senderaddr[20];
+    sprintf(srcaddr,"%02x:%02x:%02x:%02x:%02x:%02x",hdr->SourceAddr[0],hdr->SourceAddr[1],hdr->SourceAddr[2],hdr->SourceAddr[3],hdr->SourceAddr[4],hdr->SourceAddr[5]);
+    sprintf(senderaddr,"%02x:%02x:%02x:%02x:%02x:%02x",hdr->SenderAddr[0],hdr->SenderAddr[1],hdr->SenderAddr[2],hdr->SenderAddr[3],hdr->SenderAddr[4],hdr->SenderAddr[5]);
+    sprintf(destaddr,"%02x:%02x:%02x:%02x:%02x:%02x",hdr->DestAddr[0],hdr->DestAddr[1],hdr->DestAddr[2],hdr->DestAddr[3],hdr->DestAddr[4],hdr->DestAddr[5]);
+    
+    fprintf(fp_rx,"%s,%d,%s,%s,%s,%u,%u,%u,%u,,"
+    ,judge_packet_type(hdr,type),pattern,srcaddr,senderaddr,destaddr,hdr->len,hdr->seqNum,prev_checksum,current_checksum
+    );
+    fclose(fp_rx);
+}
+void output_data_csv_ordata(FILE *fp,or_data_packet_t* hdr,char* filename){
+    if((fp = fopen(filename,"a+")) == NULL){
+        printf("can't open file");
+        exit(1);
+    }
+    fprintf(fp,"%u,%u",hdr->srcHop,hdr->destHop);
+    fclose(fp);
+}
+
+void output_data_csv_tx_hdr(mac_frame_header_t* hdr,char* filename){
+    if((fp_tx = fopen(filename,"a+")) == NULL){
+        printf("can't open %s\n",filename);
+        exit(1);
+    }
+    char type[20];
+    char srcaddr[20];
+    char destaddr[20];
+    char senderaddr[20];
+    sprintf(srcaddr,"%02x:%02x:%02x:%02x:%02x:%02x",hdr->SourceAddr[0],hdr->SourceAddr[1],hdr->SourceAddr[2],hdr->SourceAddr[3],hdr->SourceAddr[4],hdr->SourceAddr[5]);
+    sprintf(senderaddr,"%02x:%02x:%02x:%02x:%02x:%02x",hdr->SenderAddr[0],hdr->SenderAddr[1],hdr->SenderAddr[2],hdr->SenderAddr[3],hdr->SenderAddr[4],hdr->SenderAddr[5]);
+    sprintf(destaddr,"%02x:%02x:%02x:%02x:%02x:%02x",hdr->DestAddr[0],hdr->DestAddr[1],hdr->DestAddr[2],hdr->DestAddr[3],hdr->DestAddr[4],hdr->DestAddr[5]);
+    
+    fprintf(fp_tx,"%s,%s,%s,%s,%u,%u,%u,,"
+    ,judge_packet_type(hdr,type),srcaddr,senderaddr,destaddr,hdr->len,hdr->seqNum,hdr->checksum
+    );
+    fclose(fp_tx);
+}
+
 packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_frame_header_t* packet){//,uint8_t flag){
     packet_table_entry_t* current = p_table->head;
     packet_table_entry_t* prev = NULL;
+
     
     while(current && is_smaller_addr(current->srcAddr,srcAddr)){
         prev = current;
@@ -829,7 +866,10 @@ packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_fram
     }
 
     if(current && is_same_seq(current->seq,seq)){
-        
+            //パターン２・・受信済みでACKしてない場合
+            //パターン3・・受信済みでACKしてないけど、ACKしない場合
+            //パターン4・・受信済みでACK済みの場合
+            
         //-----------------------------------------------------
         routing_table_entry_t* r_current = r_table->head;
         while(r_current && !is_same_addr(r_current->addr,packet->DestAddr)){//宛先端末のホップ数を調べる
@@ -837,9 +877,23 @@ packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_fram
         }
         or_data_packet_t* data_p = (or_data_packet_t*)packet->payload;
         
-        if(r_current->hop >= data_p->destHop){
-            //p_entry->flag = ACK;
-            current->flag = ACK;
+        if(current->flag == DATA){
+           if(r_current->hop >= data_p->destHop){
+                //2..ACKする場合
+                //p_entry->flag = ACK;
+                current->flag = ACK;
+                output_data_csv_rx_hdr(packet,rx_filename,2);
+                output_data_csv_ordata(fp_rx,data_p,rx_filename);
+            } else{
+                //3
+                output_data_csv_rx_hdr(packet,rx_filename,3);
+                output_data_csv_ordata(fp_rx,data_p,rx_filename);
+            }
+            
+        }else if(current->flag == ACK){
+            //4
+            output_data_csv_rx_hdr(packet,rx_filename,4);
+            output_data_csv_ordata(fp_rx,data_p,rx_filename);
         }
         //-----------------------------------------------------------
         
@@ -851,8 +905,22 @@ packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_fram
             current->
         }
         */
+        output_data_csv_space(fp_rx,rx_filename);
         return current;
     }else{
+        //パターン１・・未受信でデータ受信
+        //パターン５・・未受信でACK受信
+        or_data_packet_t* data_p = (or_data_packet_t*)packet->payload;
+        if(packet->type == DATA){
+            //1
+            output_data_csv_rx_hdr(packet,rx_filename,1);
+            output_data_csv_ordata(fp_rx,data_p,rx_filename);
+        }
+        else{//type==ACK
+            //5
+            output_data_csv_rx_hdr(packet,rx_filename,5);
+        }
+        
         //insert
         printf("insert packet table\n");
         //セグメントエラーがデータパケットの中継中に出た
@@ -867,7 +935,13 @@ packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_fram
 
         mac_set_addr(srcAddr, new_entry->srcAddr);
         new_entry->seq = seq;
-        new_entry->flag = DATA ;//1 = data , 2 = ack
+        
+        if(packet->type == DATA){
+            new_entry->flag = DATA ;//1 = data , 2 = ack
+        }else if(packet->type == ACK){
+            new_entry->flag = ACK;
+        }
+        
         new_entry->next = NULL;
         (p_table)->size++;
 
@@ -879,6 +953,9 @@ packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_fram
             prev->next = new_entry;
         }
         print_packet_table();
+        
+        output_data_csv_space(fp_rx,rx_filename);
+        
         return new_entry;
     }
 }
@@ -1158,35 +1235,40 @@ uint16_t checksum(byte *data,int len){
 
 boolean calc_checksum(mac_frame_header_t* hdr,int len){
     mac_frame_header_t *tmp = hdr;
-    uint16_t prev_checksum = 0;
+    prev_checksum = 0;
     prev_checksum = hdr->checksum;
     
     tmp->checksum = 0;
-    uint16_t current = checksum((byte*)tmp,len);
+    current_checksum = checksum((byte*)tmp,len);
     printf("origin(tx):%u\n",prev_checksum);
-    printf("rx        :%u\n",current);
-    return current == prev_checksum;
+    printf("rx        :%u\n",current_checksum);
+    return current_checksum == prev_checksum;
 }
-
-void get_time_now(){
+void get_time_rx_now(){//struct timespec *times ,struct tm *tm){
     //struct timespec ts;
     //struct tm tm_tx,tm_rx;
-    clock_gettime(CLOCK_REALTIME,&ts);
-    //localtime_r(&ts.tv_sec,&tm_rx);
-    localtime_r(&ts.tv_sec,&tm_tx);
-    printf("rxtime:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm_tx.tm_year+1900,tm_tx.tm_mon+1,tm_tx.tm_mday,tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec,ts.tv_nsec);
+    clock_gettime(CLOCK_REALTIME,&ts_rx);
+    localtime_r(&ts_rx.tv_sec,&tm_rx);
+    printf("rx time:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec,ts_rx.tv_nsec);
     //printf("difftime:")
 }
+
+void get_time_tx_now(){
+    clock_gettime(CLOCK_REALTIME,&ts_tx);
+    localtime_r(&ts_tx.tv_sec,&tm_tx);
+    printf("tx time:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm_tx.tm_year+1900,tm_tx.tm_mon+1,tm_tx.tm_mday,tm_tx.tm_hour,tm_tx.tm_min,tm_tx.tm_sec,ts_tx.tv_nsec);
+}
+
 void txlora(byte *frame, byte datalen) {
 
     //checksum function
     ((mac_frame_header_t*)frame)->checksum = 0;//送信するたびに0に初期化しないと値が一致しない
     ((mac_frame_header_t*)frame)->checksum = checksum(frame,(int)datalen);
     printf("checksum: %u\n",((mac_frame_header_t*)frame)->checksum);
-    
-    //tx time
-    get_time_now();
-    
+
+    //get_time_now(&ts_tx,&tm_tx);
+    get_time_tx_now();
+
     // set the IRQ mapping DIO0=TxDone DIO1=NOP DIO2=NOP
     writeReg(RegDioMapping1, MAP_DIO0_LORA_TXDONE|MAP_DIO1_LORA_NOP|MAP_DIO2_LORA_NOP);
     // clear all radio IRQ flags
@@ -1206,7 +1288,7 @@ void txlora(byte *frame, byte datalen) {
     
     printf("\n");
     //printf("seq: %d",seqNum);
-    printf("send: %s\n", frame);
+    //printf("send: %s\n", frame);
     
     //確認
     mac_frame_header_t* p_frame = (mac_frame_header_t*)frame;
@@ -1220,12 +1302,17 @@ void txlora(byte *frame, byte datalen) {
         print_mac_frame_header(p_frame);
         print_data_frame(p_frame);
         printf("------------------\n");
-        output_data_csv_tx_time((int)datalen);
-        output_data_csv_tx_hdr(p_frame);
-        output_data_csv_ordata((or_data_packet_t*)p_frame->payload);
-        output_data_csv_space();
+        output_data_csv_tx_time(tx_filename);
+        output_data_csv_tx_hdr(p_frame,tx_filename);
+        output_data_csv_ordata(fp_tx,((or_data_packet_t*)p_frame->payload),tx_filename);
+        output_data_csv_space(fp_tx,tx_filename);
+    }else if(p_frame->type == ACK){
+        print_mac_frame_header(p_frame);
+        printf("------------------\n");
+        output_data_csv_tx_time(tx_filename);
+        output_data_csv_tx_hdr(p_frame,tx_filename);
+        output_data_csv_space(fp_tx,tx_filename);
     }
-    
     //printf("length: %d\n",sizeof(Hello));
     
 
@@ -1279,14 +1366,10 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
     routing_table_entry_t* current = r_table->head;
     if(packet_p->type == ACK){
         printf("ACK dataなので転送を中止します.\n");
-        /*
-        mac_print_addr(packet_p->SourceAddr);
-        printf("seqnum: %u\n",packet_p->seqNum);
-        */
-        packet_table_entry_t* p_entry = insert_packet_table(packet_p->SourceAddr,packet_p->seqNum,packet_p);
-                //if(p_entry){//受信済み
+        insert_packet_table(packet_p->SourceAddr,packet_p->seqNum,packet_p);
+        //if(p_entry){//受信済み
         //if(current->hop >= data_p->destHop){
-        p_entry->flag = ACK;
+        //p_entry->flag = ACK;
     }
     else if(packet_p->type == DATA){
             print_mac_frame_header(packet_p);
@@ -1298,7 +1381,12 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
             printf("%s\n",data_p->message);
             //printf("payload message : %s\n",message);
             printf("ACKを送信します.\n");
-        
+            
+            //パターン１
+            output_data_csv_rx_hdr(packet_p,rx_filename,1);
+            output_data_csv_ordata(fp_rx,((or_data_packet_t*)packet_p->payload),rx_filename);
+            output_data_csv_space(fp_rx,rx_filename);
+            
             Ack_p->seqNum = packet_p->seqNum;
             mac_set_addr(packet_p->DestAddr,Ack_p->DestAddr);
             mac_set_addr(packet_p->SourceAddr,Ack_p->SourceAddr);
@@ -1315,13 +1403,13 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
             
         }else{//自分ではない場合
             printf("transfer data\n");
-            /*
-            while(current && !is_same_addr(current->addr,packet_p->DestAddr)){//宛先端末のホップ数を調べる
+            
+            while(current && !is_same_addr(current->addr,packet_p->DestAddr)){//宛先端末のホップ数を調べる 
                 current = current->next;
-            }*/
+            }
             if(current){
                 packet_table_entry_t* p_entry = insert_packet_table(packet_p->SourceAddr,packet_p->seqNum,packet_p);
-                if(p_entry->flag != ACK){//受信してない
+                if(p_entry->flag != ACK){//受信済み
                // }
                 /*else{//未受信
                     //転送待機時間の算出
@@ -1347,6 +1435,15 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
     }
 }
 
+
+void output_data_csv_RSSI(int Packet_RSSI,int RSSI,long int SNR,int lora_length,char* filename){
+    if((fp_rx = fopen(filename,"a+")) == NULL){
+        printf("can't open file");
+        exit(1);
+    }
+    fprintf(fp_rx,"%d,%d,%li,%i,,",Packet_RSSI,RSSI,SNR,lora_length);
+    fclose(fp_rx);
+}
 
 boolean receive(char *payload) {
     // clear rxDone
@@ -1388,15 +1485,16 @@ void receivepacket() {
     {
         if(receive(message)) {
             mac_frame_header_t* p = (mac_frame_header_t*)message;
-            //get_time_now();
+            //get_time_now(&ts_rx,&tm_rx);
+            get_time_rx_now();
             time(&after_backoff);
             //checksum function
             
-                for(int i = 0;i < (int)receivedbytes;i++){
+               /* for(int i = 0;i < (int)receivedbytes;i++){
                     printf("%02x ",message[i]);
                 }
                 printf("\n");
-            
+            */
             if(!calc_checksum(p,(int)receivedbytes)){
                 printf("Length: %i", (int)receivedbytes);
                 printf("パケットを破棄します.\n");
@@ -1424,34 +1522,27 @@ void receivepacket() {
                 count++;
                 printf("rx count: %d\n",count);
                 
-        
+                int packetrssi = readReg(0x1A)-rssicorr;
+                int rssi = readReg(0x1B)-rssicorr;
                 //mac_frame_payload_t* pay_p = (mac_frame_payload_t*)p;
                 printf("\n");
                 printf("------------------\n");
                 printf("Listening at SF%i on %.6lf Mhz.\n", sf,(double)freq/1000000);
 
 
-                printf("Packet RSSI: %d, ", readReg(0x1A)-rssicorr);
-                printf("RSSI: %d, ", readReg(0x1B)-rssicorr);
+                printf("Packet RSSI: %d, ", packetrssi);
+                printf("RSSI: %d, ",rssi);
                 printf("SNR: %li, ", SNR);
                 printf("Length: %i", (int)receivedbytes);
                 printf("\n");
                 //printf("Payload: %s\n", message);
-
-                if(p->type == HELLO){
-
-                    print_mac_frame_header(p);
-        
-            
-                    insert_routing_table(p->SourceAddr, 1, p->seqNum);
-                    add_routing_table(p);
-                    print_routing_table(r_table);
-                }else if(p->type == DATA){
-                    print_mac_frame_header(p);
-                    print_data_frame(p);
+                
+                if(p->type == DATA || p->type == ACK){
+                    output_data_csv_rx_time(rx_filename);
+                    output_data_csv_RSSI(packetrssi,rssi,SNR,(int)receivedbytes,rx_filename);
                 }
                 // sousinsitayatu
-                //judge_transfer_data(p);
+                judge_transfer_data(p);
 
                 // payload no entry list.
                 /*num_entry = p->len - sizeof(mac_frame_header_t) / sizeof(mac_lora_frame_header_t);
@@ -1504,11 +1595,37 @@ packet_table_entry_t* check_packet_table(uint8_t *srcAddr,uint16_t seq){//,uint8
     }
     return NULL;
 }
+void output_data_csv_backoff_time(char* filename,time_t start_backoff_time,double backoff){
+    if((fp_tx = fopen(filename,"a+")) == NULL){
+        printf("can't open %s\n",filename);
+        exit(1);
+    }
+    char buf[128];
+    struct tm ptm;
+    //ptm = localtime(&start_backoff_time);
+    localtime_r(&start_backoff_time,&ptm);
+    strftime(buf,sizeof(buf),"%Y/%m/%d %H:%M:%S",&ptm);
+	fprintf(fp_tx,"%s,%lf,",buf,backoff);
+	fclose(fp_tx);
+}
+/*
+void output_data_csv_time_now(char* filename,struct tm now){
+	if((fp = fopen(filename,"w")) == NULL){
+        printf("can't open %s\n",filename);
+        exit(1);
+    }
+    char buf[128];
+    struct tm *ptm = now;
+    //ptm = localtime(&now);
+    strftime(buf,sizeof(buf),"%Y/%m/%d %H:%M:%S",ptm);
+    fprintf(fp,"%s",buf);
+    fclose(fp);
+}
+*/
 
 double return_backoff_time(double backoff,time_t backoff_now){
     //printf("backoff time = %lf\n",backoff);
     double return_backoff;
-    
     //printf("backoff: %lf\n",backoff);
     return_backoff = backoff_now + backoff * pow(10.0,-3.0);
     //printf("now time: %ld\n",now);
@@ -1516,58 +1633,61 @@ double return_backoff_time(double backoff,time_t backoff_now){
     return return_backoff;
 }
 
-void file_open(char* file_name){//file_name = 〇〇.csv
-    //create result file csv
-    //FILE *fp;
-    if((fp = fopen(file_name,"w")) == NULL){
-        printf("can't open %s",file_name);
+void rx_file_open(char* file_name){//file_name = 〇〇.csv
+    if((fp_rx = fopen(file_name,"w")) == NULL){
+        printf("can't open %s\n",file_name);
         exit(1);
     }
-    fprintf(fp,"tx_time,time,nsec,lora_length,,type,srcAddress,destaddr,length,seq,tx_checksum,,srcHop,destHop\n");
-    fclose(fp);
+    fprintf(fp_rx,"rx_time,time,nsec,PacketRSSI,RSSI,SNR,lora_length,,Type,pattern,srcAddr,senderAddr,destAddr,length,seq,tx_checksum,rx_checksum,,srcHop,destHop\n");
+    fclose(fp_rx);
 }
-routing_table_entry_t* check_routing_table(uint8_t* destaddr){
-    routing_table_entry_t* current = r_table->head;
-    
-    while(current){
-        current = current->next;
-        if(is_same_addr(current->addr,destaddr)){
-            return current;
-        }
+
+void tx_file_open(char* file_name){
+    if((fp_tx = fopen(file_name,"w")) == NULL){
+        printf("can't open %s\n",file_name);
+        exit(1);
     }
-    return NULL;
+    fprintf(fp_tx,"backoff_start_time,backoff_value,tx_time,time,nsec,,Type,srcAddr,senderAddr,destAddr,length,seq,tx_checksum,,srcHop,destHop\n");
+    fclose(fp_tx);
+}
+void hop_file_open(char *file_name){
+    if((fp_hop = fopen(file_name,"w")) == NULL){
+        printf("can't open %s\n",file_name);
+        exit(1);
+    }
+    fprintf(fp_hop,"time,nsec,srcAddress,hop,seq\n");
+    fclose(fp_hop);
 }
 
 int main (int argc, char *argv[]) {
-    int data_size;
-    int tx_packet_size;
     if(argv[1]){
-        filename = argv[1];
-        file_open(filename);
+        rx_filename = argv[1];
+        rx_file_open(rx_filename);
     }else if(!argv[1]){
-        printf("保存ファイルを設定してください.\n");
+        printf("パケット受信保存ファイルを設定してください.\n");
         exit(1);
     }
-    if(!argv[2]){
-        printf("data packetのサイズを指定してください.\n");
+    
+    if(argv[2]){
+        tx_filename = argv[2];
+        tx_file_open(tx_filename);
+    }else if(!argv[2]){
+        printf("パケット送信保存ファイルを設定してください.\n");
         exit(1);
-    }else if(argv[2]){
-        data_size = atoi(argv[2]);
-        printf("data size: %d\n",data_size);
     }
-    if(!argv[3]){
-        printf("データパケットの送信回数を指定してください.\n");
+    if(argv[3]){
+        hop_filename = argv[3];
+        hop_file_open(hop_filename);
+    }else if(!argv[3]){
+        printf("helloホップ数保存ファイルを設定してください.\n");
         exit(1);
-    }else if(argv[3]){
-        tx_packet_size = atoi(argv[3]);
-        printf("packet size: %dbytes\n",data_size);
     }
     /*
-    else if(!argv[2]){
-        printf("宛先アドレスを指定してください.\n");
+    else if(!argv[3]){
+        printf("data packetのサイズを指定してください.\n");
         exit(1);
-    }else if(argv[2]){
-         r_table_size = atoi(argv[2]);
+    }else if(argv[3]){
+        data_size = atoi(argv[3]);
     }
     */
     /*
@@ -1631,12 +1751,13 @@ int main (int argc, char *argv[]) {
     uint8_t dest_addr[6] = {0xb8,0x27,0xeb,0x60,0xf7,0xbf};
     mac_set_addr(dest_addr,data_packet->DestAddr);
     
+    //mac_print_addr(hello->SourceAddr);
+    
     //時刻を一秒追加
     time(&later);
     later+=5;
     //while
-    //while(1){
-    while(data_packet->seqNum < tx_packet_size){
+    while(1){
         time(&now);
         if(now<=later){
             //time(&now);
@@ -1655,13 +1776,13 @@ int main (int argc, char *argv[]) {
                 receivepacket(); 
                 
            // }
-
+           
+            
             //if(bo_st->head && (now <= bo_st->head->backoff)){
             //if(bo_st->head && (now > return_backoff_time(bo_st->head->backoff))){
-            
-            /*
             if(bo_st->head ){
                 if(now > return_backoff_time(bo_st->head->backoff,bo_st->head->backoff_now)){
+                    //printf("debugだよ\n");
                     //return_backoff_time(bo_st->head->backoff);
                     packet_table_entry_t* p_entry = check_packet_table(bo_st->head->srcAddr,bo_st->head->seqNum);
                     if(p_entry->flag != ACK){
@@ -1673,9 +1794,13 @@ int main (int argc, char *argv[]) {
                         ((or_data_packet_t*)p_entry->packet->payload)->srcHop ++;
                         ((or_data_packet_t*)p_entry->packet->payload)->destHop = r_entry->hop;
                         printf("データを転送します.\n");
+                        //set sender address
+                        mac_set_addr(my_addr,p_entry->packet->SenderAddr);
                         //送信モード
                         set_txmode();
                         
+                        output_data_csv_backoff_time(tx_filename,bo_st->head->backoff_now,bo_st->head->backoff);
+                        //output_data_csv_tx_time(tx_filename);
                         txlora((byte*)p_entry->packet,(byte)p_entry->packet->len);
                         
                         //受信モードに切り替え
@@ -1683,8 +1808,8 @@ int main (int argc, char *argv[]) {
                     }
                     dequeue_backoff_table();
                 }
-            }*/
-        }else if(now > later){
+            }
+        }else{//else if(r_table_size == 5 ){
             //printf("%d\n",count);
             count=0;
             //時間測定
@@ -1743,43 +1868,25 @@ int main (int argc, char *argv[]) {
             //Hello_p->len = total_len;
             //txlora((byte*)&Hello, total_len);
             //////
-            data_packet->seqNum++;
+            Hello_p->seqNum++;
             
-            //int num = get_routing_table(Hello_p);
-            //int header_len = sizeof(mac_frame_header_t);
-            //int payload_len = num * sizeof(mac_frame_payload_t);
-            //int payload_len = sizeof(or_data_packet_t);
-            //printf("%d %d\n",header_len,payload_len);
-            //int total_len = header_len + payload_len;
-            int total_len = data_size;
+            int num = get_routing_table(Hello_p);
+            int header_len = sizeof(mac_frame_header_t);
+            int payload_len = num * sizeof(mac_frame_payload_t);
+            printf("%d %d\n",header_len,payload_len);
+            int total_len = header_len + payload_len;
             printf("total length: %d\n",total_len);
+            
             if(total_len >= 255){
                 printf("最大ペイロードサイズを超えています.\n");
                 return 0;
             }else{
-                //if(data_size < total_len){
-                if(0){
-                    printf("指定されたデータサイズが送信するデータサイズを下回っています.\n");
-                }else{
-                    data_packet->len = total_len;
-                    /*
-                    for(int i = 53;i<255;i++){
-                        Hello[i] =0x11;
-                    } */
-                    
-                    routing_table_entry_t* toDest = check_routing_table(dest_addr);
-                    
-                    if(!toDest){
-                        printf("指定された宛先アドレスがルーティングテーブルに存在しません.\n");
-                    }
-                    else{
-                        ((or_data_packet_t*)data_packet->payload)->destHop = toDest->hop;
-                        //print_mac_frame_header(data_packet);
-                        //print_data_frame(data_packet);
-                        txlora((byte*)&data, (byte)total_len);
-                        usleep(250000);
-                    }
-                }
+                Hello_p->len = total_len;
+                /*
+                for(int i = 53;i<255;i++){
+                    Hello[i] =0x11;
+                } */
+                txlora((byte*)&Hello, (byte)total_len);
             }
             
                 
@@ -1795,13 +1902,13 @@ int main (int argc, char *argv[]) {
             gettimeofday(&tv_rand,NULL);
             srand(tv_rand.tv_sec * (tv_rand.tv_usec + 1));
 
-            later= later + 4.9 + (rand() % 200) * pow(10.0,-3.0) ;
+            //later= later + 4.9 + (rand() % 200) * pow(10.0,-3.0) ;
+            later= later + 29 + (rand() % 2000) *pow(10.0,-3.0);
             //delay(5000);
         
         }
         
     }
-    printf("end tx\n");
 
 /*
     if (!strcmp("sender", argv[1])) {
