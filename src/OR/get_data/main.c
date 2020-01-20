@@ -593,7 +593,7 @@ int get_routing_table(mac_frame_header_t* hello){
    return i;
 }
 
-void output_data_csv_time(){
+void output_data_csv_time(char* filename){
     char time[50];
     char a_time[50];
     if((fp_hop = fopen(filename,"a+")) == NULL){
@@ -619,7 +619,7 @@ void output_data_csv_tx_time(int txbytes){
     fclose(fp);
 }
 
-void output_data_csv(routing_table_entry_t* head){
+void output_data_csv(routing_table_entry_t* head,char* filename){
     char address[20];
     
     if((fp_hop = fopen(filename,"a+")) == NULL){
@@ -696,7 +696,7 @@ void print_routing_table(routing_table_t* routing_t){
         printf("data nothing\n");
         return ;
     }
-    output_data_csv_time();
+    output_data_csv_time(hop_filename);
     while(current){//current!=NULL
         printf("Node%d ",i);
         mac_print_addr(current->addr);
@@ -704,7 +704,7 @@ void print_routing_table(routing_table_t* routing_t){
         printf("Sequence Number: %u\n",current->seq);
         printf("table size: %d\n",routing_t->size);
         i++;
-        output_data_csv(current);
+        output_data_csv(current,hop_filename);
         
         current = current->next;
     }
