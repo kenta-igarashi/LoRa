@@ -1672,17 +1672,20 @@ boolean bo_timediff(struct timespec *prev,double bo){
 
 boolean timediff(){//struct timespec *now,struct timespec *later){
     if(now.tv_sec > later.tv_sec){
-        return true;
+        //return true;
+        return false;
     }
     else if(now.tv_sec == later.tv_sec){
         if(now.tv_nsec >= later.tv_nsec){
-            return true;
+           // return true;
+           return false;
         }
-    }
+    }/*
     else if(now.tv_sec < later.tv_sec){
         return false;
-    }
-    return false;
+    }*/
+    //return false;
+    return true;
 }
 
 
