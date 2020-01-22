@@ -1679,6 +1679,9 @@ boolean timediff(){//struct timespec *now,struct timespec *later){
             return true;
         }
     }
+    else if(now.tv_sec < later.tv_sec){
+        return false;
+    }
     return false;
 }
 
