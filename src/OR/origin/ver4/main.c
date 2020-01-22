@@ -1960,7 +1960,9 @@ int main (int argc, char *argv[]) {
 
             //later= later + 4.9 + (rand() % 200) * pow(10.0,-3.0) ;
             //later= later + 29 + (rand() % 2000) *pow(10.0,-3.0);
-            later.tv_sec+=29;
+            later.tv_sec +=29;
+            printf("now: %ld\n",now.tv_sec);
+            printf("later: %ld\n",later.tv_sec);
             later.tv_nsec = rand() % (2* 1000* 1000 * 1000);
             if(later.tv_nsec > 1000*1000*1000){
                 later.tv_sec++;
