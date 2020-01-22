@@ -310,7 +310,8 @@ uint16_t current_checksum;
 //現在時刻の取得
 struct timespec ts_tx,ts_rx;
 struct tm tm_tx,tm_rx;
-time_t after_backoff;
+//time_t after_backoff;
+struct timespec after_backoff;
 
 /*ノードの固有値
  * LoRaの物理層から取得はできないため、有線LANのものを取得して使う
@@ -960,7 +961,7 @@ packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_fram
     }
 }
 
-void insert_backoff(uint8_t* srcAddr,uint16_t seq,double backoff,time_t backoff_now){//,uint8_t flag){
+void insert_backoff(uint8_t* srcAddr,uint16_t seq,double backoff,struct timespec backoff_now){//,uint8_t flag){
     backoff_entry_t* current = bo_st->head;
     backoff_entry_t* previous = NULL;
     while(current && is_smaller_backoff(current->backoff,backoff)){
@@ -976,7 +977,8 @@ void insert_backoff(uint8_t* srcAddr,uint16_t seq,double backoff,time_t backoff_
         new_entry->backoff = backoff;
         mac_set_addr(srcAddr, new_entry->srcAddr);
         new_entry->seqNum = seq;
-        new_entry->backoff_now = backoff_now;
+        new_entry->backoff_now.tv_sec = backoff_now.tv_sec;
+        new_entry->backoff_now.tv_nsec = backoff_now.tv_nsec;
         new_entry->next = NULL;
         (bo_st)->size++;
         
@@ -1347,9 +1349,9 @@ double OR_calculate_backoff(uint8_t desthop,uint8_t hop){
     double beta = 1.0;
     double difference = (table - expected) - alpha;
     
-    double base_backoff = 500;//ミリ秒
+    double base_backoff = 500.0;//ミリ秒
     double backoff = 0;
-    double max_backoff = base_backoff * 2;
+    double max_backoff = base_backoff * 2.0;
     
     double max_random_backoff = (max_backoff) * (sigmoid(gain, difference + beta) - sigmoid(gain,difference));
     backoff += max_backoff * sigmoid(gain,difference);
@@ -1365,6 +1367,10 @@ double OR_calculate_backoff(uint8_t desthop,uint8_t hop){
     }
     printf("backoff           :%lf\n",backoff);
     return backoff;
+}
+
+void get_time(struct timespec ts_a){
+    clock_gettime(CLOCK_REALTIME,&ts_a);
 }
 
 void judge_transfer_data(mac_frame_header_t *packet_p){
@@ -1422,7 +1428,8 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
                     //転送待機時間の算出
                   */  
                     double bo = OR_calculate_backoff(data_p->destHop,current->hop);
-                    time(&after_backoff);
+                    //time(&after_backoff);
+                    get_time(&after_backoff);
                     insert_backoff(packet_p->SourceAddr,packet_p->seqNum,bo,after_backoff);
                 }
             }
@@ -1630,7 +1637,7 @@ void output_data_csv_time_now(char* filename,struct tm now){
 }
 */
 
-double return_backoff_time(double backoff,time_t backoff_now){
+double return_backoff_time(double backoff,time_t backoff_now){//timespec ts backoff_now
     //printf("backoff time = %lf\n",backoff);
     double return_backoff;
     //printf("backoff: %lf\n",backoff);
@@ -1638,6 +1645,26 @@ double return_backoff_time(double backoff,time_t backoff_now){
     //printf("now time: %ld\n",now);
     //printf("backoff time: %lf\n",backoff_now);
     return return_backoff;
+}
+
+boolean timediff(struct timespec *prev,double bo){
+    struct timespec next;
+    next.tv_sec = prev->tv_sec;
+    next.tv_nsec = prev->tv_nsec + bo * 1000 * 1000;
+    if(next.tv_nsec > 1000*1000*1000){
+        next.tv_sec++;
+        next.tv_nsec -= 1000*1000*1000;
+    }
+    
+    if(now.tv_sec >= next.tv_sec){
+        return true;
+    }
+    else if(now.tv_sec == next.tv_sec){
+        if(now.tv_nsec >= next.tv_nsec){
+            return true;
+        }
+    }
+    return false;
 }
 
 void rx_file_open(char* file_name){//file_name = 〇〇.csv
@@ -1664,6 +1691,19 @@ void hop_file_open(char *file_name){
     }
     fprintf(fp_hop,"time,nsec,srcAddress,hop,seq\n");
     fclose(fp_hop);
+}
+
+
+
+void add_time(struct timespec ts,int i,double d){
+    ts.tv_sec += i;
+    ts.tv_nsec += d * 
+}
+
+boolean diff_hello_time(struct timspec now_ts,struct timespec after_ts){
+    
+    
+    
 }
 
 int main (int argc, char *argv[]) {
