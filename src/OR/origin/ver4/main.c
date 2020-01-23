@@ -899,7 +899,7 @@ packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_fram
         }
         //-----------------------------------------------------------
         
-        print_packet_table();
+        //print_packet_table();
         /*
         //update
         printf("data update\n");
@@ -954,7 +954,7 @@ packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_fram
             new_entry->next = prev->next;
             prev->next = new_entry;
         }
-        print_packet_table();
+        //print_packet_table();
         
         output_data_csv_space(fp_rx,rx_filename);
         
@@ -1328,6 +1328,16 @@ void txlora(byte *frame, byte datalen) {
     
 }
 
+void print_time(struct timespec *ts){
+    struct tm tm;
+    localtime_r(&ts->tv_sec,&tm);
+    printf("bo start time:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm.tm_year+1900,tm.tm_mon+1,tm.tm_mday,tm.tm_hour,tm.tm_min,tm.tm_sec,ts->tv_nsec);
+}
+void print_bo_time(struct timespec *ts){
+    struct tm tm;
+    localtime_r(&ts->tv_sec,&tm);
+    printf("bo time:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm.tm_year+1900,tm.tm_mon+1,tm.tm_mday,tm.tm_hour,tm.tm_min,tm.tm_sec,ts->tv_nsec);
+}
 
 double sigmoid(double gain, double x){
     return (1.0 / (1.0 + exp(-gain * x)));
@@ -1431,6 +1441,7 @@ void judge_transfer_data(mac_frame_header_t *packet_p){
                     double bo = OR_calculate_backoff(data_p->destHop,current->hop);
                     //time(&after_backoff);
                     get_time(&after_backoff);
+                    print_time(&after_backoff);
                     insert_backoff(packet_p->SourceAddr,packet_p->seqNum,bo,after_backoff);
                 }
             }
@@ -1610,21 +1621,24 @@ packet_table_entry_t* check_packet_table(uint8_t *srcAddr,uint16_t seq){//,uint8
     }
     return NULL;
 }
-/*
+
 void output_data_csv_backoff_time(char* filename,struct timespec *start_backoff_time,double backoff){
     if((fp_tx = fopen(filename,"a+")) == NULL){
         printf("can't open %s\n",filename);
         exit(1);
     }
-    char buf[128];
+    char time[128];
     struct tm ptm;
     //ptm = localtime(&start_backoff_time);
-    localtime_r(start_backoff_time,&ptm);
-    strftime(buf,sizeof(buf),"%Y/%m/%d %H:%M:%S",&ptm);
-	fprintf(fp_tx,"%s,%lf,",buf,backoff);
+    localtime_r(&start_backoff_time->tv_sec,&ptm);
+    sprintf(time,"%d/%02d/%02d %02d:%02d:%02d\n",ptm.tm_year+1900,ptm.tm_mon+1,ptm.tm_mday,ptm.tm_hour,ptm.tm_min,ptm.tm_sec);
+    
+    //strftime(buf,sizeof(buf),"%Y/%m/%d %H:%M:%S",&ptm);
+    //printf("backoff time:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec,ts_rx.tv_nsec);
+	fprintf(fp_tx,"%s,%09ld,%lf,",time,start_backoff_time->tv_nsec,backoff);
 	fclose(fp_tx);
 }
-* */
+
 /*
 void output_data_csv_time_now(char* filename,struct tm now){
 	if((fp = fopen(filename,"w")) == NULL){
@@ -1639,7 +1653,7 @@ void output_data_csv_time_now(char* filename,struct tm now){
     fclose(fp);
 }
 */
-
+/*
 double return_backoff_time(double backoff,time_t backoff_now){//timespec ts backoff_now
     //printf("backoff time = %lf\n",backoff);
     double return_backoff;
@@ -1649,7 +1663,7 @@ double return_backoff_time(double backoff,time_t backoff_now){//timespec ts back
     //printf("backoff time: %lf\n",backoff_now);
     return return_backoff;
 }
-
+*/
 boolean bo_timediff(struct timespec *prev,double bo){
     struct timespec next;
     next.tv_sec = prev->tv_sec;

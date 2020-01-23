@@ -1770,7 +1770,12 @@ int main (int argc, char *argv[]) {
             // total_len = header_len + payload_len;
             //Hello_p->len = total_len;
             //txlora((byte*)&Hello, total_len);
-            //////
+            //////]
+            routing_table_entry_t* toDest = check_routing_table(dest_addr);
+            if(!toDest){
+                printf("指定された宛先アドレスがルーティングテーブルに存在しません.\n");
+            }
+            else{
             data_packet->seqNum++;
             
             //int num = get_routing_table(Hello_p);
@@ -1794,18 +1799,12 @@ int main (int argc, char *argv[]) {
                     for(int i = 53;i<255;i++){
                         Hello[i] =0x11;
                     } */
-                    
-                    routing_table_entry_t* toDest = check_routing_table(dest_addr);
-                    
-                    if(!toDest){
-                        printf("指定された宛先アドレスがルーティングテーブルに存在しません.\n");
-                    }
-                    else{
+                   
                         ((or_data_packet_t*)data_packet->payload)->destHop = toDest->hop;
                         //print_mac_frame_header(data_packet);
                         //print_data_frame(data_packet);
                         txlora((byte*)&data, (byte)total_len);
-                        usleep(250000);
+                        //usleep(250000);
                     }
                 }
             }
