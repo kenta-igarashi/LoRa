@@ -1631,7 +1631,7 @@ void output_data_csv_backoff_time(char* filename,struct timespec *start_backoff_
     struct tm ptm;
     //ptm = localtime(&start_backoff_time);
     localtime_r(&start_backoff_time->tv_sec,&ptm);
-    sprintf(time,"%d/%02d/%02d %02d:%02d:%02d\n",ptm.tm_year+1900,ptm.tm_mon+1,ptm.tm_mday,ptm.tm_hour,ptm.tm_min,ptm.tm_sec);
+    sprintf(time,"%d/%02d/%02d %02d:%02d:%02d",ptm.tm_year+1900,ptm.tm_mon+1,ptm.tm_mday,ptm.tm_hour,ptm.tm_min,ptm.tm_sec);
     
     //strftime(buf,sizeof(buf),"%Y/%m/%d %H:%M:%S",&ptm);
     //printf("backoff time:  %d/%02d/%02d %02d:%02d:%02d.%09ld\n",tm_rx.tm_year+1900,tm_rx.tm_mon+1,tm_rx.tm_mday,tm_rx.tm_hour,tm_rx.tm_min,tm_rx.tm_sec,ts_rx.tv_nsec);
