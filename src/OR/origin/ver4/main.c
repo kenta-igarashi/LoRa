@@ -1874,7 +1874,7 @@ int main (int argc, char *argv[]) {
                         //送信モード
                         set_txmode();
                         
-                        //output_data_csv_backoff_time(tx_filename,bo_st->head->backoff_now,bo_st->head->backoff);
+                        output_data_csv_backoff_time(tx_filename,&bo_st->head->backoff_now,bo_st->head->backoff);
                         //output_data_csv_tx_time(tx_filename);
                         txlora((byte*)p_entry->packet,(byte)p_entry->packet->len);
                         
