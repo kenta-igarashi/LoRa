@@ -1717,7 +1717,7 @@ void tx_file_open(char* file_name){
         printf("can't open %s\n",file_name);
         exit(1);
     }
-    fprintf(fp_tx,"backoff_start_time,backoff_value,tx_time,time,nsec,,Type,srcAddr,senderAddr,destAddr,length,seq,tx_checksum,,srcHop,destHop\n");
+    fprintf(fp_tx,"backoff_start_time,nsec,backoff_value,tx_time,time,nsec,,Type,srcAddr,senderAddr,destAddr,length,seq,tx_checksum,,srcHop,destHop\n");
     fclose(fp_tx);
 }
 void hop_file_open(char *file_name){
