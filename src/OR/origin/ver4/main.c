@@ -881,7 +881,7 @@ packet_table_entry_t* insert_packet_table(uint8_t *srcAddr,uint16_t seq,mac_fram
         
         if(current->flag == DATA){
            if(r_current->hop >= data_p->destHop){
-                //2..ACKする場合
+                //2..ACKする場合(暗黙的ACK)
                 //p_entry->flag = ACK;
                 current->flag = ACK;
                 output_data_csv_rx_hdr(packet,rx_filename,2);
